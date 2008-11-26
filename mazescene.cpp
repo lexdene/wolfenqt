@@ -67,8 +67,8 @@ QRectF WallItem::boundingRect() const
 
 void WallItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
 {
-    static QPixmap pm("wall_ceilingtile.jpg");
-    painter->drawPixmap(boundingRect(), pm, pm.rect());
+    static QImage img = QImage("wall_ceilingtile.jpg").convertToFormat(QImage::Format_RGB32);
+    painter->drawImage(boundingRect(), img, img.rect());
 }
 
 static inline QTransform rotatingTransform(qreal angle)

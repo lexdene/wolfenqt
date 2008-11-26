@@ -8,6 +8,7 @@ DEPENDPATH += .
 INCLUDEPATH += .
 
 QT += webkit
+QT += opengl
 
 # Input
 HEADERS += mazescene.h

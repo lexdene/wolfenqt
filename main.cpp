@@ -1,18 +1,35 @@
 #include <QtGui>
+#include <QGLWidget>
 
 #include "mazescene.h"
+
+class View : public QGraphicsView
+{
+public:
+    View();
+    void resizeEvent(QResizeEvent *event);
+};
+
+View::View()
+{
+    resize(640, 480);
+    setViewport(new QGLWidget);
+    setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+}
+
+void View::resizeEvent(QResizeEvent *event)
+{
+    resetMatrix();
+
+    qreal factor = width() / 4.0;
+    scale(factor, factor);
+}
 
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
 
     MazeScene *scene = new MazeScene;
-
-    QGraphicsView view;
-    view.resize(640, 480);
-    view.setScene(scene);
-    view.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
-    view.show();
 
     const char *map =
         "########"
@@ -43,6 +60,9 @@ int main(int argc, char **argv)
         }
     }
 
-    view.scale(150, 150);
+    View view;
+    view.setScene(scene);
+    view.show();
+
     return app.exec();
 }
