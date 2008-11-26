@@ -3,12 +3,12 @@
 #include <QPointF>
 #include <QTime>
 
-class WebItem;
+class MazeScene;
 
 class WallItem : public QGraphicsItem
 {
 public:
-    WallItem(const QPointF &a, const QPointF &b);
+    WallItem(MazeScene *scene, const QPointF &a, const QPointF &b);
 
     QPointF a() const { return m_a; }
     QPointF b() const { return m_b; }
@@ -16,15 +16,15 @@ public:
     QRectF boundingRect() const;
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
 
-    QGraphicsProxyWidget *webItem() const
+    QGraphicsProxyWidget *childItem() const
     {
-        return m_webItem;
+        return m_childItem;
     }
 
 private:
     QPointF m_a;
     QPointF m_b;
-    QGraphicsProxyWidget *m_webItem;
+    QGraphicsProxyWidget *m_childItem;
 };
 
 class MazeScene : public QGraphicsScene
@@ -43,6 +43,7 @@ protected:
 
 public slots:
     void move();
+    void toggleRenderer();
 
 private:
     QVector<WallItem *> m_walls;

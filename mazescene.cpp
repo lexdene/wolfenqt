@@ -1,5 +1,8 @@
 #include "mazescene.h"
 
+#include <QCheckBox>
+#include <QGLWidget>
+#include <QGraphicsView>
 #include <QGraphicsProxyWidget>
 #include <QPainter>
 #include <QKeyEvent>
@@ -24,14 +27,14 @@ MazeScene::MazeScene()
 
 void MazeScene::addWall(const QPointF &a, const QPointF &b)
 {
-    WallItem *item = new WallItem(a, b);
+    WallItem *item = new WallItem(this, a, b);
     addItem(item);
     m_walls << item;
 
     setSceneRect(-1, -1, 2, 2);
 }
 
-WallItem::WallItem(const QPointF &a, const QPointF &b)
+WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b)
     : m_a(a)
     , m_b(b)
 {
@@ -45,19 +48,45 @@ WallItem::WallItem(const QPointF &a, const QPointF &b)
     };
 
     if ((qrand() % 100) >= 10) {
-        m_webItem = 0;
+        m_childItem = 0;
         return;
     }
 
+    m_childItem = new QGraphicsProxyWidget(this);
+
     static int index = 0;
-    const char *url = urls[(index++) % (sizeof(urls)/sizeof(char*))];
+    if (index == 0) {
+        QWidget *widget = new QWidget;
 
-    m_webItem = new QGraphicsProxyWidget(this);
+        QCheckBox *checkBox = new QCheckBox("Use OpenGL", widget);
+        checkBox->setChecked(true);
+        QObject::connect(checkBox, SIGNAL(toggled(bool)), scene, SLOT(toggleRenderer()), Qt::QueuedConnection);
 
-    QWebView *view = new QWebView;
-    view->setUrl(QUrl(url));
-    m_webItem->setWidget(view);
-    m_webItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
+        QPalette palette;
+        palette.setColor(QPalette::Window, QColor(Qt::transparent));
+        widget->setPalette(palette);
+
+        m_childItem->setWidget(widget);
+    } else {
+        const char *url = urls[index % (sizeof(urls)/sizeof(char*))];
+
+        QWebView *view = new QWebView;
+        view->setUrl(QUrl(url));
+
+        m_childItem->setWidget(view);
+    }
+
+    m_childItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
+
+    QRectF rect = m_childItem->boundingRect();
+    QPointF center = rect.center();
+
+    const qreal scale = index ? 0.7 : 0.1;
+
+    m_childItem->scale(scale / rect.width(), scale / rect.height());
+    m_childItem->translate(-center.x(), -center.y());
+
+    ++index;
 }
 
 QRectF WallItem::boundingRect() const
@@ -102,16 +131,19 @@ static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, 
     item->setZValue(-tz);
     item->setTransform(project);
 
-    if (item->webItem()) {
-        QRectF rect = item->webItem()->boundingRect();
-        QPointF center = rect.center();
+#if 0
+    QGraphicsProxyWidget *child = item->childItem();
+    if (child) {
+        //QRectF rect = child->boundingRect();
+        //QPointF center = rect.center();
 
-        item->webItem()->setVisible(true);
-        item->webItem()->setZValue(-tz);
-        item->webItem()->resetMatrix();
-        item->webItem()->scale(0.7 / rect.width(), 0.7 / rect.height());
-        item->webItem()->translate(-center.x(), -center.y());
+        //child->setZValue(-tz);
+
+        //child->resetMatrix();
+        //child->scale(0.7 / rect.width(), 0.7 / rect.height());
+        //child->translate(-center.x(), -center.y());
     }
+#endif
 }
 
 void MazeScene::keyPressEvent(QKeyEvent *event)
@@ -166,4 +198,13 @@ void MazeScene::move()
         foreach (WallItem *item, m_walls)
             updateTransform(item, item->a(), item->b(), m_cameraPos, m_cameraAngle);
     }
+}
+
+void MazeScene::toggleRenderer()
+{
+    QGraphicsView *view = views().at(0);
+    if (view->viewport()->inherits("QGLWidget"))
+        view->setViewport(new QWidget);
+    else
+        view->setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
 }

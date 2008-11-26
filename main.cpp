@@ -12,7 +12,7 @@ public:
 
 View::View()
 {
-    resize(640, 480);
+    resize(1024, 768);
     setViewport(new QGLWidget);
     setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
 }
@@ -28,6 +28,7 @@ void View::resizeEvent(QResizeEvent *event)
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    QPixmapCache::setCacheLimit(100 * 1024); // 100 MB
 
     MazeScene *scene = new MazeScene;
 
