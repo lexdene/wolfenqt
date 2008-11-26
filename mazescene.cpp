@@ -11,7 +11,7 @@
 
 MazeScene::MazeScene()
     : m_cameraPos(1.5, 1.5)
-    , m_cameraAngle(180)
+    , m_cameraAngle(0.1)
     , m_walkingVelocity(0)
     , m_turningVelocity(0)
     , m_simulationTime(0)

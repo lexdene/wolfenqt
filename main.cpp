@@ -13,7 +13,7 @@ public:
 View::View()
 {
     resize(1024, 768);
-    setViewport(new QGLWidget);
+    setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
     setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
 }
 
