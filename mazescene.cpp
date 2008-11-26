@@ -99,9 +99,10 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b)
     QRectF rect = m_childItem->boundingRect();
     QPointF center = rect.center();
 
-    const qreal scale = index ? 0.7 : 0.1;
+    qreal scale = index ? 0.8 : 0.2;
 
-    m_childItem->scale(scale / rect.width(), scale / rect.height());
+    scale = qMin(scale / rect.width(), scale / rect.height());
+    m_childItem->scale(scale, scale);
     m_childItem->translate(-center.x(), -center.y());
 
     ++index;
