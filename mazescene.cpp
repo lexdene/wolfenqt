@@ -2,7 +2,6 @@
 
 #include <QCheckBox>
 #include <QGLWidget>
-#include <QGraphicsView>
 #include <QGraphicsProxyWidget>
 #include <QPainter>
 #include <QKeyEvent>
@@ -11,7 +10,22 @@
 
 #include <qmath.h>
 
-MazeScene::MazeScene()
+View::View()
+{
+    resize(1024, 768);
+    setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
+    setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+}
+
+void View::resizeEvent(QResizeEvent *)
+{
+    resetMatrix();
+
+    qreal factor = width() / 4.0;
+    scale(factor, factor);
+}
+
+MazeScene::MazeScene(const char *map, int width, int height)
     : m_cameraPos(1.5, 1.5)
     , m_cameraAngle(0.1)
     , m_walkingVelocity(0)
@@ -20,17 +34,49 @@ MazeScene::MazeScene()
     , m_walkTime(0)
     , m_dirty(true)
 {
-    m_time.start();
+    QMap<char, int> types;
+    types[' '] = -1;
+    types['#'] = 0;
+    types['&'] = 1;
+    types['@'] = 2;
+
+    int type;
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < height; ++x) {
+            if (map[y*width+x] != ' ')
+                continue;
+
+            type = types[map[(y-1)*width+x]];
+            if (type >= 0)
+                addWall(QPointF(x, y), QPointF(x+1, y), type);
+
+            type = types[map[(y+1)*width+x]];
+            if (type >= 0)
+                addWall(QPointF(x+1, y+1), QPointF(x, y+1), type);
+
+            type = types[map[y*width+x-1]];
+            if (type >= 0)
+                addWall(QPointF(x, y+1), QPointF(x, y), type);
+
+            type = types[map[y*width+x+1]];
+            if (type >= 0)
+                addWall(QPointF(x+1, y), QPointF(x+1, y+1), type);
+        }
+    }
+
 
     QTimer *timer = new QTimer(this);
     timer->setInterval(20);
     timer->start();
     connect(timer, SIGNAL(timeout()), this, SLOT(move()));
+
+    m_time.start();
+    move();
 }
 
-void MazeScene::addWall(const QPointF &a, const QPointF &b)
+void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
 {
-    WallItem *item = new WallItem(this, a, b);
+    WallItem *item = new WallItem(this, a, b, type);
     addItem(item);
     m_walls << item;
 
@@ -50,9 +96,10 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     painter->fillRect(rect, g);
 }
 
-WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b)
+WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int type)
     : m_a(a)
     , m_b(b)
+    , m_type(type)
 {
     static const char *urls[] =
     {
@@ -68,7 +115,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b)
     m_shadowItem->setPen(Qt::NoPen);
     m_shadowItem->setZValue(10);
 
-    if ((qrand() % 100) >= 10) {
+    if (type == 1 || (qrand() % 100) >= 10) {
         m_childItem = 0;
         return;
     }
@@ -151,8 +198,15 @@ QRectF WallItem::boundingRect() const
 
 void WallItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
 {
-    static QImage img = QImage("wall_ceilingtile.jpg").convertToFormat(QImage::Format_RGB32);
-    painter->drawImage(boundingRect(), img, img.rect());
+    static QImage brown = QImage("brown.gif").convertToFormat(QImage::Format_RGB32);
+    static QImage book = QImage("book.gif").convertToFormat(QImage::Format_RGB32);
+    if (m_type != 2) {
+        if (m_type == 1) {
+            painter->drawImage(boundingRect(), book, book.rect());
+        } else {
+            painter->drawImage(boundingRect(), brown, brown.rect());
+        }
+    }
 }
 
 static inline QTransform rotatingTransform(qreal angle)

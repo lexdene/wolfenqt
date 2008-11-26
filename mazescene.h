@@ -1,14 +1,22 @@
 #include <QGraphicsItem>
 #include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QPointF>
 #include <QTime>
 
 class MazeScene;
 
+class View : public QGraphicsView
+{
+public:
+    View();
+    void resizeEvent(QResizeEvent *event);
+};
+
 class WallItem : public QGraphicsItem
 {
 public:
-    WallItem(MazeScene *scene, const QPointF &a, const QPointF &b);
+    WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int type);
 
     QPointF a() const { return m_a; }
     QPointF b() const { return m_b; }
@@ -28,15 +36,16 @@ private:
     QPointF m_b;
     QGraphicsProxyWidget *m_childItem;
     QGraphicsRectItem *m_shadowItem;
+    int m_type;
 };
 
 class MazeScene : public QGraphicsScene
 {
     Q_OBJECT
 public:
-    MazeScene();
+    MazeScene(const char *map, int width, int height);
 
-    void addWall(const QPointF &a, const QPointF &b);
+    void addWall(const QPointF &a, const QPointF &b, int type);
     void drawBackground(QPainter *painter, const QRectF &rect);
 
 protected:
