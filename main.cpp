@@ -16,10 +16,7 @@ int main(int argc, char **argv)
         "#      #"
         "###&####";
 
-    const int width = 8;
-    const int height = 8;
-
-    MazeScene *scene = new MazeScene(map, width, height);
+    MazeScene *scene = new MazeScene(map, 8, 8);
 
     View view;
     view.setScene(scene);

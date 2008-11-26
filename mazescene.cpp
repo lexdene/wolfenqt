@@ -9,6 +9,7 @@
 #include <QWebView>
 
 #include <qmath.h>
+#include <qdebug.h>
 
 View::View()
 {
@@ -115,14 +116,14 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     m_shadowItem->setPen(Qt::NoPen);
     m_shadowItem->setZValue(10);
 
-    if (type == 1 || (qrand() % 100) >= 10) {
+    static int index = 0;
+    if (type == 1 || index >= 4 && (qrand() % 100) >= 20) {
         m_childItem = 0;
         return;
     }
 
     m_childItem = new QGraphicsProxyWidget(this);
 
-    static int index = 0;
     if (index == 0) {
         QWidget *widget = new QWidget;
 
@@ -135,6 +136,20 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         widget->setPalette(palette);
 
         m_childItem->setWidget(widget);
+    } else if (index < 4) {
+        ++index;
+        const char *map = "#####"
+                          "#   #"
+                          "# @ #"
+                          "#   #"
+                          "#####";
+        MazeScene *embeddedScene = new MazeScene(map, 5, 5);
+        View *view = new View;
+        view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+        view->setScene(embeddedScene);
+        view->resize(480, 320); // not soo big
+        view->setViewport(new QWidget); // no OpenGL here
+        m_childItem->setWidget(view);
     } else {
         const char *url = urls[index % (sizeof(urls)/sizeof(char*))];
 
@@ -161,9 +176,9 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
 void WallItem::setDepths(qreal za, qreal zb)
 {
     const qreal falloff = 40;
-    const qreal maxAlpha = 180;
-    int va = falloff*zb;
-    int vb = falloff*za;
+    const int maxAlpha = 180;
+    int va = int(falloff * zb);
+    int vb = int(falloff * za);
 
     if (va >= maxAlpha && vb >= maxAlpha) {
         m_shadowItem->setBrush(QColor(0, 0, 0, maxAlpha));
@@ -260,11 +275,14 @@ void MazeScene::keyReleaseEvent(QKeyEvent *event)
         return;
     }
 
-    QGraphicsScene::keyPressEvent(event);
+    QGraphicsScene::keyReleaseEvent(event);
 }
 
 bool MazeScene::handleKey(int key, bool pressed)
 {
+    if (focusItem())
+        return false;
+
     switch (key) {
     case Qt::Key_Left:
     case Qt::Key_Right:
@@ -297,13 +315,17 @@ void MazeScene::move()
     }
 
     if (m_dirty) {
+        m_dirty = false;
         foreach (WallItem *item, m_walls)
             updateTransform(item, item->a(), item->b(), m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+        setFocusItem(0); // setVisible(true) might give focus to one of the items
     }
 }
 
 void MazeScene::toggleRenderer()
 {
+    if (views().size() == 0)
+        return;
     QGraphicsView *view = views().at(0);
     if (view->viewport()->inherits("QGLWidget"))
         view->setViewport(new QWidget);
