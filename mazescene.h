@@ -21,10 +21,13 @@ public:
         return m_childItem;
     }
 
+    void setDepths(qreal za, qreal zb);
+
 private:
     QPointF m_a;
     QPointF m_b;
     QGraphicsProxyWidget *m_childItem;
+    QGraphicsRectItem *m_shadowItem;
 };
 
 class MazeScene : public QGraphicsScene
@@ -34,6 +37,7 @@ public:
     MazeScene();
 
     void addWall(const QPointF &a, const QPointF &b);
+    void drawBackground(QPainter *painter, const QRectF &rect);
 
 protected:
     void keyPressEvent(QKeyEvent *event);

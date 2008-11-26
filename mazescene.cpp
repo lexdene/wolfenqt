@@ -34,6 +34,19 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b)
     setSceneRect(-1, -1, 2, 2);
 }
 
+void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
+{
+    QLinearGradient g(QPointF(0, rect.top()), QPointF(0, rect.bottom()));
+
+    g.setColorAt(0, QColor(0, 0, 0, 50));
+    g.setColorAt(0.4, QColor(0, 0, 0, 100));
+    g.setColorAt(0.6, QColor(0, 0, 0, 100));
+    g.setColorAt(1, QColor(0, 0, 0, 50));
+    painter->fillRect(QRectF(rect.topLeft(), QPointF(rect.right(), rect.center().y())), QColor(100, 120, 200));
+    painter->fillRect(QRectF(QPointF(rect.left(), rect.center().y()), rect.bottomRight()), QColor(127, 190, 100));
+    painter->fillRect(rect, g);
+}
+
 WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b)
     : m_a(a)
     , m_b(b)
@@ -44,8 +57,13 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b)
         "http://www.youtube.com",
         "http://programming.reddit.com",
         "http://www.trolltech.com",
-        "http://www.planetkde.org"
+        "http://www.planetkde.org",
+        "http://chaos.troll.no/~tavestbo/webkit"
     };
+
+    m_shadowItem = new QGraphicsRectItem(boundingRect(), this);
+    m_shadowItem->setPen(Qt::NoPen);
+    m_shadowItem->setZValue(10);
 
     if ((qrand() % 100) >= 10) {
         m_childItem = 0;
@@ -87,6 +105,39 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b)
     m_childItem->translate(-center.x(), -center.y());
 
     ++index;
+}
+
+void WallItem::setDepths(qreal za, qreal zb)
+{
+    const qreal falloff = 40;
+    const qreal maxAlpha = 180;
+    int va = falloff*zb;
+    int vb = falloff*za;
+
+    if (va >= maxAlpha && vb >= maxAlpha) {
+        m_shadowItem->setBrush(QColor(0, 0, 0, maxAlpha));
+    } else {
+        qreal xa = 0;
+        qreal xb = 1;
+
+        if (va >= maxAlpha) {
+            xa = 1 - (maxAlpha - vb) / (va - vb);
+            va = maxAlpha;
+        }
+
+        if (vb >= maxAlpha) {
+            xb = (maxAlpha - va) / (vb - va);
+            vb = maxAlpha;
+        }
+
+        const QRectF rect = boundingRect();
+        QLinearGradient g(rect.topLeft(), rect.topRight());
+
+        g.setColorAt(xa, QColor(0, 0, 0, va));
+        g.setColorAt(xb, QColor(0, 0, 0, vb));
+
+        m_shadowItem->setBrush(g);
+    }
 }
 
 QRectF WallItem::boundingRect() const
@@ -131,24 +182,12 @@ static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, 
     item->setZValue(-tz);
     item->setTransform(project);
 
-#if 0
-    QGraphicsProxyWidget *child = item->childItem();
-    if (child) {
-        //QRectF rect = child->boundingRect();
-        //QPointF center = rect.center();
-
-        //child->setZValue(-tz);
-
-        //child->resetMatrix();
-        //child->scale(0.7 / rect.width(), 0.7 / rect.height());
-        //child->translate(-center.x(), -center.y());
-    }
-#endif
+    item->setDepths(QLineF(QPointF(), ca).length(), QLineF(QPointF(), cb).length());
 }
 
 void MazeScene::keyPressEvent(QKeyEvent *event)
 {
-    if (!event->isAutoRepeat() && handleKey(event->key(), true)) {
+    if (handleKey(event->key(), true)) {
         event->accept();
         return;
     }
@@ -158,7 +197,7 @@ void MazeScene::keyPressEvent(QKeyEvent *event)
 
 void MazeScene::keyReleaseEvent(QKeyEvent *event)
 {
-    if (!event->isAutoRepeat() && handleKey(event->key(), false)) {
+    if (handleKey(event->key(), false)) {
         event->accept();
         return;
     }

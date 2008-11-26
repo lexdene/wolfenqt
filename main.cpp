@@ -61,6 +61,8 @@ int main(int argc, char **argv)
         }
     }
 
+    scene->move();
+
     View view;
     view.setScene(scene);
     view.show();
