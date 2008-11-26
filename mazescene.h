@@ -59,5 +59,6 @@ private:
 
     QTime m_time;
     long m_simulationTime;
+    long m_walkTime;
     bool m_dirty;
 };

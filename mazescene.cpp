@@ -9,12 +9,15 @@
 #include <QTimer>
 #include <QWebView>
 
+#include <qmath.h>
+
 MazeScene::MazeScene()
     : m_cameraPos(1.5, 1.5)
     , m_cameraAngle(0.1)
     , m_walkingVelocity(0)
     , m_turningVelocity(0)
     , m_simulationTime(0)
+    , m_walkTime(0)
     , m_dirty(true)
 {
     m_time.start();
@@ -159,7 +162,7 @@ static inline QTransform rotatingTransform(qreal angle)
     return transform;
 }
 
-static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, const QPointF &cameraPos, qreal cameraAngle)
+static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, const QPointF &cameraPos, qreal cameraAngle, qreal time)
 {
     const QTransform rotation = rotatingTransform(cameraAngle);
 
@@ -177,7 +180,7 @@ static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, 
     const qreal tz = 0.5 * (ca.y() + cb.y());
     const qreal fov = 0.5;
 
-    QTransform project(mx, 0, mz * fov, 0, 1, 0, tx, 0, tz * fov);
+    QTransform project(mx, 0, mz * fov, 0, 1, 0, tx, 0.04 * qSin(10 * time), tz * fov);
 
     item->setVisible(true);
     item->setZValue(-tz);
@@ -230,13 +233,18 @@ void MazeScene::move()
         m_cameraPos += m_walkingVelocity * rotatingTransform(-m_cameraAngle).map(QPointF(0, 1));
         m_simulationTime += 5;
 
+        bool walking = m_walkingVelocity != 0;
+        bool turning = m_turningVelocity != 0;
         if (!m_dirty)
-            m_dirty = (m_turningVelocity != 0 || m_walkingVelocity != 0);
+            m_dirty = turning || walking;
+
+        if (walking)
+            m_walkTime += 5;
     }
 
     if (m_dirty) {
         foreach (WallItem *item, m_walls)
-            updateTransform(item, item->a(), item->b(), m_cameraPos, m_cameraAngle);
+            updateTransform(item, item->a(), item->b(), m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
     }
 }
 
