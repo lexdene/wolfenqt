@@ -9,6 +9,7 @@
 MazeScene::MazeScene()
     : m_cameraPos(1.5, 1.5)
     , m_cameraAngle(180)
+    , m_walkingVelocity(0)
     , m_turningVelocity(0)
     , m_simulationTime(0)
     , m_dirty(true)
@@ -16,7 +17,7 @@ MazeScene::MazeScene()
     m_time.start();
 
     QTimer *timer = new QTimer(this);
-    timer->setInterval(10);
+    timer->setInterval(20);
     timer->start();
     connect(timer, SIGNAL(timeout()), this, SLOT(move()));
 }
@@ -43,7 +44,7 @@ WallItem::WallItem(const QPointF &a, const QPointF &b)
         "http://www.planetkde.org"
     };
 
-    if ((qrand() % 100) >= 20) {
+    if ((qrand() % 100) >= 10) {
         m_webItem = 0;
         return;
     }
@@ -99,8 +100,7 @@ static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, 
 
     item->setVisible(true);
     item->setZValue(-tz);
-    item->resetMatrix();
-    item->setTransform(project, true);
+    item->setTransform(project);
 
     if (item->webItem()) {
         QRectF rect = item->webItem()->boundingRect();
@@ -116,7 +116,7 @@ static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, 
 
 void MazeScene::keyPressEvent(QKeyEvent *event)
 {
-    if (handleKey(event->key(), true)) {
+    if (!event->isAutoRepeat() && handleKey(event->key(), true)) {
         event->accept();
         return;
     }
@@ -126,7 +126,7 @@ void MazeScene::keyPressEvent(QKeyEvent *event)
 
 void MazeScene::keyReleaseEvent(QKeyEvent *event)
 {
-    if (handleKey(event->key(), false)) {
+    if (!event->isAutoRepeat() && handleKey(event->key(), false)) {
         event->accept();
         return;
     }
@@ -165,6 +165,5 @@ void MazeScene::move()
     if (m_dirty) {
         foreach (WallItem *item, m_walls)
             updateTransform(item, item->a(), item->b(), m_cameraPos, m_cameraAngle);
-        m_dirty = false;
     }
 }

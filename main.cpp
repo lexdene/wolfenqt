@@ -43,6 +43,6 @@ int main(int argc, char **argv)
         }
     }
 
-    view.scale(200, 200);
+    view.scale(150, 150);
     return app.exec();
 }
