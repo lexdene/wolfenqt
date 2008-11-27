@@ -65,6 +65,8 @@ public:
     Entity(const QPointF &pos);
     void updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time);
 
+    QPointF pos() const { return m_pos; }
+
 private:
     QPointF m_pos;
 };
@@ -94,6 +96,10 @@ private slots:
     void moveDoors(qreal value);
 
 private:
+    bool blocked(const QPointF &pos) const;
+    bool tryMove(QPointF &pos, const QPointF &delta) const;
+    void updateTransforms();
+
     QVector<WallItem *> m_walls;
     QVector<WallItem *> m_doors;
     QVector<QGraphicsItem *> m_floorTiles;
@@ -109,7 +115,6 @@ private:
     QTimeLine *m_doorAnimation;
     long m_simulationTime;
     long m_walkTime;
-    bool m_dirty;
     int m_width;
     int m_height;
 };

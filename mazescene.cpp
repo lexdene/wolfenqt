@@ -33,13 +33,15 @@ MazeScene::MazeScene(const char *map, int width, int height)
     , m_cameraAngle(0.1)
     , m_walkingVelocity(0)
     , m_turningVelocity(0)
-    , m_doorAnimation(0)
     , m_simulationTime(0)
     , m_walkTime(0)
-    , m_dirty(true)
     , m_width(width)
     , m_height(height)
 {
+    m_doorAnimation = new QTimeLine(1000, this);
+    m_doorAnimation->setUpdateInterval(20);
+    connect(m_doorAnimation, SIGNAL(valueChanged(qreal)), this, SLOT(moveDoors(qreal)));
+
     QMap<char, int> types;
     types[' '] = -2;
     types['-'] = -1;
@@ -49,6 +51,7 @@ MazeScene::MazeScene(const char *map, int width, int height)
     types['%'] = 3;
     types['$'] = 4;
     types['?'] = 5;
+    types['!'] = 6;
 
     int type;
     for (int y = 0; y < height; ++y) {
@@ -82,7 +85,7 @@ MazeScene::MazeScene(const char *map, int width, int height)
     connect(timer, SIGNAL(timeout()), this, SLOT(move()));
 
     m_time.start();
-    move();
+    updateTransforms();
 }
 
 void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
@@ -399,69 +402,119 @@ bool MazeScene::handleKey(int key, bool pressed)
     switch (key) {
     case Qt::Key_Left:
     case Qt::Key_Right:
-        m_turningVelocity = (pressed ? (key == Qt::Key_Left ? -1 : 1) : 0) * 0.5;
+        m_turningVelocity = (pressed ? (key == Qt::Key_Left ? -1 : 1) * 0.5 : 0.0);
         return true;
     case Qt::Key_Up:
     case Qt::Key_Down:
-        m_walkingVelocity = (pressed ? (key == Qt::Key_Down ? -1 : 1) : 0) * 0.01;
+        m_walkingVelocity = (pressed ? (key == Qt::Key_Down ? -1 : 1) * 0.01 : 0.0);
         return true;
     }
 
     return false;
 }
 
-void MazeScene::move()
+static inline QRectF rectFromPoint(const QPointF &point, qreal size)
 {
-    long elapsed = m_time.elapsed();
-    while (m_simulationTime <= elapsed) {
-        m_cameraAngle += m_turningVelocity;
-        m_cameraPos += m_walkingVelocity * rotatingTransform(-m_cameraAngle).map(QPointF(0, 1));
-        m_simulationTime += 5;
+    return QRectF(point, point).adjusted(-size/2, -size/2, size/2, size/2);
+}
 
-        bool walking = m_walkingVelocity != 0;
-        bool turning = m_turningVelocity != 0;
-        if (!m_dirty)
-            m_dirty = turning || walking;
+bool MazeScene::blocked(const QPointF &pos) const
+{
+    const QRectF rect = rectFromPoint(pos, 0.4);
 
-        if (walking)
-            m_walkTime += 5;
+    foreach (WallItem *item, m_walls) {
+        if (item->type() == 6
+            || item->type() == -1 && m_doorAnimation->state() != QTimeLine::Running
+               && m_doorAnimation->direction() == QTimeLine::Backward)
+            continue;
+
+        const QPointF a = item->a();
+        const QPointF b = item->b();
+
+        QRectF wallRect = QRectF(a, b).adjusted(-0.01, -0.01, 0.01, 0.01);
+
+        if (wallRect.intersects(rect))
+            return true;
     }
 
-    if (m_dirty) {
-        m_dirty = false;
-        foreach (WallItem *item, m_walls) {
-            item->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
-            if (item->isVisible()) {
-                // embed recursive scene
-                if (QGraphicsProxyWidget *child = item->childItem()) {
-                    View *view = qobject_cast<View *>(child->widget());
-                    if (view && !view->scene()) {
-                        const char *map = "#$###"
-                            "#   #"
-                            "# @ #"
-                            "#   #"
-                            "#####";
-                        MazeScene *embeddedScene = new MazeScene(map, 5, 5);
-                        view->setScene(embeddedScene);
-                    }
+    foreach (Entity *entity, m_entities) {
+        QRectF entityRect = rectFromPoint(entity->pos(), 0.4);
+
+        if (entityRect.intersects(rect))
+            return true;
+    }
+
+    return false;
+}
+
+bool MazeScene::tryMove(QPointF &pos, const QPointF &delta) const
+{
+    bool moved = false;
+    if (!blocked(pos + QPointF(delta.x(), 0))) {
+        pos.setX(pos.x() + delta.x());
+        moved = true;
+    }
+
+    if (!blocked(pos + QPointF(0, delta.y()))) {
+        pos.setY(pos.y() + delta.y());
+        moved = true;
+    }
+
+    return moved;
+}
+
+void MazeScene::updateTransforms()
+{
+    foreach (WallItem *item, m_walls) {
+        item->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+        if (item->isVisible()) {
+            // embed recursive scene
+            if (QGraphicsProxyWidget *child = item->childItem()) {
+                View *view = qobject_cast<View *>(child->widget());
+                if (view && !view->scene()) {
+                    const char *map =
+                        "#$###"
+                        "#   #"
+                        "# @ #"
+                        "#   #"
+                        "#####";
+                    MazeScene *embeddedScene = new MazeScene(map, 5, 5);
+                    view->setScene(embeddedScene);
                 }
             }
         }
-        foreach (Entity *entity, m_entities)
-            entity->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
-        setFocusItem(0); // setVisible(true) might give focus to one of the items
-        update();
     }
+    foreach (Entity *entity, m_entities)
+        entity->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+    setFocusItem(0); // setVisible(true) might give focus to one of the items
+    update();
+}
+
+void MazeScene::move()
+{
+    qreal oldCameraAngle = m_cameraAngle;
+    QPointF oldCameraPos = m_cameraPos;
+
+    long elapsed = m_time.elapsed();
+    while (m_simulationTime <= elapsed) {
+        m_cameraAngle += m_turningVelocity;
+
+        if (m_walkingVelocity != 0) {
+            QPointF walkingDir = rotatingTransform(-m_cameraAngle).map(QPointF(0, 1));
+            QPointF walkingDelta = m_walkingVelocity * walkingDir;
+            if (tryMove(m_cameraPos, walkingDelta))
+                m_walkTime += 5;
+        }
+
+        m_simulationTime += 5;
+    }
+
+    if (oldCameraAngle != m_cameraAngle || oldCameraPos != m_cameraPos)
+        updateTransforms();
 }
 
 void MazeScene::toggleDoors()
 {
-    if (!m_doorAnimation) {
-        m_doorAnimation = new QTimeLine(1000, this);
-        m_doorAnimation->setUpdateInterval(20);
-        connect(m_doorAnimation, SIGNAL(valueChanged(qreal)), this, SLOT(moveDoors(qreal)));
-    }
-
     setFocusItem(0);
 
     if (m_doorAnimation->state() == QTimeLine::Running)
