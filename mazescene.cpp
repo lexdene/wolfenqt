@@ -220,7 +220,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     if (type == 3 && a.y() == b.y()) {
         QWidget *widget = new QWidget;
         QPushButton *button = new QPushButton("Open Sesame", widget);
-        QObject::connect(button, SIGNAL(pressed()), scene, SLOT(toggleDoors()));
+        QObject::connect(button, SIGNAL(clicked()), scene, SLOT(toggleDoors()));
         widget->setLayout(new QVBoxLayout);
         widget->layout()->addWidget(button);
         widget->setPalette(palette);
