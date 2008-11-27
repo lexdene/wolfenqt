@@ -3,6 +3,7 @@
 #include <QGraphicsView>
 #include <QPointF>
 #include <QTime>
+#include <QTimeLine>
 
 class MazeScene;
 
@@ -29,7 +30,10 @@ public:
         return m_childItem;
     }
 
+    int type() const { return m_type; }
+
     void setDepths(qreal za, qreal zb);
+    void setAnimationTime(qreal time);
 
 private:
     QPointF m_a;
@@ -37,6 +41,7 @@ private:
     QGraphicsProxyWidget *m_childItem;
     QGraphicsRectItem *m_shadowItem;
     int m_type;
+    QRectF m_targetRect;
 };
 
 class MazeScene : public QGraphicsScene
@@ -57,9 +62,14 @@ protected:
 public slots:
     void move();
     void toggleRenderer();
+    void toggleDoors();
+
+private slots:
+    void moveDoors(qreal value);
 
 private:
     QVector<WallItem *> m_walls;
+    QVector<WallItem *> m_doors;
 
     QPointF m_cameraPos;
     qreal m_cameraAngle;
@@ -67,6 +77,7 @@ private:
     qreal m_turningVelocity;
 
     QTime m_time;
+    QTimeLine *m_doorAnimation;
     long m_simulationTime;
     long m_walkTime;
     bool m_dirty;

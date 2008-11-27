@@ -4,6 +4,7 @@
 #include <QGLWidget>
 #include <QGraphicsProxyWidget>
 #include <QPainter>
+#include <QPushButton>
 #include <QKeyEvent>
 #include <QTimer>
 #include <QWebView>
@@ -31,36 +32,40 @@ MazeScene::MazeScene(const char *map, int width, int height)
     , m_cameraAngle(0.1)
     , m_walkingVelocity(0)
     , m_turningVelocity(0)
+    , m_doorAnimation(0)
     , m_simulationTime(0)
     , m_walkTime(0)
     , m_dirty(true)
 {
     QMap<char, int> types;
-    types[' '] = -1;
+    types[' '] = -2;
+    types['-'] = -1;
     types['#'] = 0;
     types['&'] = 1;
     types['@'] = 2;
+    types['%'] = 3;
 
     int type;
     for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < height; ++x) {
-            if (map[y*width+x] != ' ')
+        for (int x = 0; x < width; ++x) {
+            type = types[map[y*width+x]];
+            if (type >= 0)
                 continue;
 
             type = types[map[(y-1)*width+x]];
-            if (type >= 0)
+            if (type >= -1)
                 addWall(QPointF(x, y), QPointF(x+1, y), type);
 
             type = types[map[(y+1)*width+x]];
-            if (type >= 0)
+            if (type >= -1)
                 addWall(QPointF(x+1, y+1), QPointF(x, y+1), type);
 
             type = types[map[y*width+x-1]];
-            if (type >= 0)
+            if (type >= -1)
                 addWall(QPointF(x, y+1), QPointF(x, y), type);
 
             type = types[map[y*width+x+1]];
-            if (type >= 0)
+            if (type >= -1)
                 addWall(QPointF(x+1, y), QPointF(x+1, y+1), type);
         }
     }
@@ -80,6 +85,9 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
     WallItem *item = new WallItem(this, a, b, type);
     addItem(item);
     m_walls << item;
+
+    if (type == -1)
+        m_doors << item;
 
     setSceneRect(-1, -1, 2, 2);
 }
@@ -116,61 +124,72 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     m_shadowItem->setPen(Qt::NoPen);
     m_shadowItem->setZValue(10);
 
-    static int index = 0;
-    if (type == 1 || index >= 4 && (qrand() % 100) >= 20) {
-        m_childItem = 0;
-        return;
+    m_targetRect = boundingRect();
+
+    qreal scale = 0.8;
+
+    m_childItem = 0;
+    QWidget *childWidget = 0;
+    if (type == 3 && a.y() == b.y()) {
+        QPushButton *button = new QPushButton("Push Me!");
+        QObject::connect(button, SIGNAL(pressed()), scene, SLOT(toggleDoors()));
+        childWidget = button;
+        scale = 0.3;
+    } else if (type == 0 || type == 2) {
+        static int index = 0;
+        if (index == 0) {
+            QWidget *widget = new QWidget;
+
+            QCheckBox *checkBox = new QCheckBox("Use OpenGL", widget);
+            checkBox->setChecked(true);
+            QObject::connect(checkBox, SIGNAL(toggled(bool)), scene, SLOT(toggleRenderer()), Qt::QueuedConnection);
+
+            QPalette palette;
+            palette.setColor(QPalette::Window, QColor(Qt::transparent));
+            widget->setPalette(palette);
+
+            childWidget = widget;
+            scale = 0.2;
+        } else if (index < 4) {
+            ++index;
+            const char *map = "#####"
+                "#   #"
+                "# @ #"
+                "#   #"
+                "#####";
+            MazeScene *embeddedScene = new MazeScene(map, 5, 5);
+            View *view = new View;
+            view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+            view->setScene(embeddedScene);
+            view->resize(480, 320); // not soo big
+            view->setViewport(new QWidget); // no OpenGL here
+
+            childWidget = view;
+        } else if (!(index % 7)) {
+            const char *url = urls[index % (sizeof(urls)/sizeof(char*))];
+
+            QWebView *view = new QWebView;
+            view->setUrl(QUrl(url));
+
+            childWidget = view;
+        }
+
+        ++index;
     }
+
+    if (!childWidget)
+        return;
 
     m_childItem = new QGraphicsProxyWidget(this);
-
-    if (index == 0) {
-        QWidget *widget = new QWidget;
-
-        QCheckBox *checkBox = new QCheckBox("Use OpenGL", widget);
-        checkBox->setChecked(true);
-        QObject::connect(checkBox, SIGNAL(toggled(bool)), scene, SLOT(toggleRenderer()), Qt::QueuedConnection);
-
-        QPalette palette;
-        palette.setColor(QPalette::Window, QColor(Qt::transparent));
-        widget->setPalette(palette);
-
-        m_childItem->setWidget(widget);
-    } else if (index < 4) {
-        ++index;
-        const char *map = "#####"
-                          "#   #"
-                          "# @ #"
-                          "#   #"
-                          "#####";
-        MazeScene *embeddedScene = new MazeScene(map, 5, 5);
-        View *view = new View;
-        view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
-        view->setScene(embeddedScene);
-        view->resize(480, 320); // not soo big
-        view->setViewport(new QWidget); // no OpenGL here
-        m_childItem->setWidget(view);
-    } else {
-        const char *url = urls[index % (sizeof(urls)/sizeof(char*))];
-
-        QWebView *view = new QWebView;
-        view->setUrl(QUrl(url));
-
-        m_childItem->setWidget(view);
-    }
-
+    m_childItem->setWidget(childWidget);
     m_childItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
 
     QRectF rect = m_childItem->boundingRect();
     QPointF center = rect.center();
 
-    qreal scale = index ? 0.8 : 0.2;
-
     scale = qMin(scale / rect.width(), scale / rect.height());
     m_childItem->scale(scale, scale);
     m_childItem->translate(-center.x(), -center.y());
-
-    ++index;
 }
 
 void WallItem::setDepths(qreal za, qreal zb)
@@ -213,15 +232,30 @@ QRectF WallItem::boundingRect() const
 
 void WallItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
 {
-    static QImage brown = QImage("brown.gif").convertToFormat(QImage::Format_RGB32);
+    static QImage brown = QImage("brown.bmp").convertToFormat(QImage::Format_RGB32);
     static QImage book = QImage("book.gif").convertToFormat(QImage::Format_RGB32);
+    static QImage door = QImage("door.bmp").convertToFormat(QImage::Format_RGB32);
+
     if (m_type != 2) {
         if (m_type == 1) {
             painter->drawImage(boundingRect(), book, book.rect());
+        } else if (m_type == -1) {
+            QRectF target = m_targetRect.translated(0.5, 0.5);
+            QRectF source = QRectF(0, 0, door.width() * (1 - target.x()), door.height());
+            painter->drawImage(m_targetRect, door, source);
         } else {
             painter->drawImage(boundingRect(), brown, brown.rect());
         }
     }
+}
+
+void WallItem::setAnimationTime(qreal time)
+{
+    QRectF rect = boundingRect();
+    m_targetRect = QRectF(QPointF(rect.left() + rect.width() * time, rect.top()),
+                          rect.bottomRight());
+    m_shadowItem->setRect(m_targetRect);
+    update();
 }
 
 static inline QTransform rotatingTransform(qreal angle)
@@ -320,6 +354,27 @@ void MazeScene::move()
             updateTransform(item, item->a(), item->b(), m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
         setFocusItem(0); // setVisible(true) might give focus to one of the items
     }
+}
+
+void MazeScene::toggleDoors()
+{
+    if (!m_doorAnimation) {
+        m_doorAnimation = new QTimeLine(1000, this);
+        m_doorAnimation->setUpdateInterval(20);
+        connect(m_doorAnimation, SIGNAL(valueChanged(qreal)), this, SLOT(moveDoors(qreal)));
+    }
+
+    if (m_doorAnimation->state() == QTimeLine::Running)
+        return;
+
+    m_doorAnimation->toggleDirection();
+    m_doorAnimation->start();
+}
+
+void MazeScene::moveDoors(qreal value)
+{
+    foreach (WallItem *item, m_doors)
+        item->setAnimationTime(1 - value);
 }
 
 void MazeScene::toggleRenderer()
