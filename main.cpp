@@ -7,9 +7,11 @@ int main(int argc, char **argv)
     QPixmapCache::setCacheLimit(100 * 1024); // 100 MB
 
     const char *map =
-        "#####&##"
+        "###&####"
         "#      #"
-        "# #### #"
+        "&      #"
+        "#      #"
+        "# ##?# #"
         "&    # #"
         "# @@   &"
         "# @@ # #"
@@ -18,7 +20,7 @@ int main(int argc, char **argv)
         "$      #"
         "#&&&&&&#";
 
-    MazeScene *scene = new MazeScene(map, 8, 10);
+    MazeScene *scene = new MazeScene(map, 8, 12);
 
     View view;
     view.setScene(scene);

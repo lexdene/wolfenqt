@@ -16,16 +16,36 @@ public:
     void resizeEvent(QResizeEvent *event);
 };
 
-class WallItem : public QGraphicsItem
+class ProjectedItem : public QGraphicsItem
 {
 public:
-    WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int type);
+    ProjectedItem(const QRectF &bounds, bool shadow = true);
 
     QPointF a() const { return m_a; }
     QPointF b() const { return m_b; }
 
     QRectF boundingRect() const;
+
+    void setPosition(const QPointF &a, const QPointF &b);
+    void updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time);
+    void setDepths(qreal za, qreal zb);
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
+    void setAnimationTime(qreal time);
+    void setImage(const QImage &image);
+
+private:
+    QPointF m_a;
+    QPointF m_b;
+    QRectF m_bounds;
+    QRectF m_targetRect;
+    QImage m_image;
+    QGraphicsRectItem *m_shadowItem;
+};
+
+class WallItem : public ProjectedItem
+{
+public:
+    WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int type);
 
     QGraphicsProxyWidget *childItem() const
     {
@@ -34,16 +54,19 @@ public:
 
     int type() const { return m_type; }
 
-    void setDepths(qreal za, qreal zb);
-    void setAnimationTime(qreal time);
+private:
+    QGraphicsProxyWidget *m_childItem;
+    int m_type;
+};
+
+class Entity : public ProjectedItem
+{
+public:
+    Entity(const QPointF &pos);
+    void updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time);
 
 private:
-    QPointF m_a;
-    QPointF m_b;
-    QGraphicsProxyWidget *m_childItem;
-    QGraphicsRectItem *m_shadowItem;
-    int m_type;
-    QRectF m_targetRect;
+    QPointF m_pos;
 };
 
 class MazeScene : public QGraphicsScene
@@ -52,6 +75,7 @@ class MazeScene : public QGraphicsScene
 public:
     MazeScene(const char *map, int width, int height);
 
+    void addEntity(Entity *entity);
     void addWall(const QPointF &a, const QPointF &b, int type);
     void drawBackground(QPainter *painter, const QRectF &rect);
 
@@ -74,6 +98,7 @@ private:
     QVector<WallItem *> m_doors;
     QVector<QGraphicsItem *> m_floorTiles;
     QVector<QPushButton *> m_buttons;
+    QVector<Entity *> m_entities;
 
     QPointF m_cameraPos;
     qreal m_cameraAngle;

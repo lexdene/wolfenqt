@@ -48,6 +48,7 @@ MazeScene::MazeScene(const char *map, int width, int height)
     types['@'] = 2;
     types['%'] = 3;
     types['$'] = 4;
+    types['?'] = 5;
 
     int type;
     for (int y = 0; y < height; ++y) {
@@ -156,11 +157,49 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     painter->fillRect(rect, g);
 }
 
+ProjectedItem::ProjectedItem(const QRectF &bounds, bool shadow)
+    : m_bounds(bounds)
+    , m_shadowItem(0)
+{
+    if (shadow) {
+        m_shadowItem = new QGraphicsRectItem(bounds, this);
+        m_shadowItem->setPen(Qt::NoPen);
+        m_shadowItem->setZValue(10);
+    }
+
+    m_targetRect = m_bounds;
+}
+
+void ProjectedItem::setPosition(const QPointF &a, const QPointF &b)
+{
+    m_a = a;
+    m_b = b;
+}
+
 WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int type)
-    : m_a(a)
-    , m_b(b)
+    : ProjectedItem(QRectF(-0.5, -0.5, 1.0, 1.0))
     , m_type(type)
 {
+    setPosition(a, b);
+
+    static QImage brown = QImage("brown.png").convertToFormat(QImage::Format_RGB32);
+    static QImage book = QImage("book.png").convertToFormat(QImage::Format_RGB32);
+    static QImage door = QImage("door.png").convertToFormat(QImage::Format_RGB32);
+
+    switch (type) {
+    case -1:
+        setImage(door);
+        break;
+    case 1:
+        setImage(book);
+        break;
+    case 2:
+        break;
+    default:
+        setImage(brown);
+        break;
+    }
+
     static const char *urls[] =
     {
         "http://www.google.com",
@@ -170,12 +209,6 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         "http://labs.trolltech.com/blogs/",
         "http://chaos.troll.no/~tavestbo/webkit"
     };
-
-    m_shadowItem = new QGraphicsRectItem(boundingRect(), this);
-    m_shadowItem->setPen(Qt::NoPen);
-    m_shadowItem->setZValue(10);
-
-    m_targetRect = boundingRect();
 
     qreal scale = 0.8;
 
@@ -199,6 +232,8 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         view->resize(480, 320); // not soo big
         view->setViewport(new QWidget); // no OpenGL here
         childWidget = view;
+    } else if (type == 5) {
+        scene->addEntity(new Entity(QPointF(3.5, 3.5)));
     } else if (type == 0 || type == 2) {
         static int index;
         if (index == 0) {
@@ -239,15 +274,18 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     m_childItem->translate(-center.x(), -center.y());
 }
 
-void WallItem::setDepths(qreal za, qreal zb)
+void ProjectedItem::setDepths(qreal za, qreal zb)
 {
+    if (!m_shadowItem)
+        return;
+
     const qreal falloff = 40;
     const int maxAlpha = 180;
     int va = int(falloff * zb);
     int vb = int(falloff * za);
 
-    if (va >= maxAlpha && vb >= maxAlpha) {
-        m_shadowItem->setBrush(QColor(0, 0, 0, maxAlpha));
+    if (va == vb || va >= maxAlpha && vb >= maxAlpha) {
+        m_shadowItem->setBrush(QColor(0, 0, 0, qMin(maxAlpha, va)));
     } else {
         qreal xa = 0;
         qreal xb = 1;
@@ -272,49 +310,45 @@ void WallItem::setDepths(qreal za, qreal zb)
     }
 }
 
-QRectF WallItem::boundingRect() const
+QRectF ProjectedItem::boundingRect() const
 {
-    return QRectF(-0.5, -0.5, 1, 1);
+    return m_bounds;
 }
 
-void WallItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
+void ProjectedItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
 {
-    static QImage brown = QImage("brown.png").convertToFormat(QImage::Format_RGB32);
-    static QImage book = QImage("book.png").convertToFormat(QImage::Format_RGB32);
-    static QImage door = QImage("door.png").convertToFormat(QImage::Format_RGB32);
-
-    if (m_type != 2) {
-        if (m_type == 1) {
-            painter->drawImage(boundingRect(), book, book.rect());
-        } else if (m_type == -1) {
-            QRectF target = m_targetRect.translated(0.5, 0.5);
-            QRectF source = QRectF(0, 0, door.width() * (1 - target.x()), door.height());
-            painter->drawImage(m_targetRect, door, source);
-        } else {
-            painter->drawImage(boundingRect(), brown, brown.rect());
-        }
+    if (!m_image.isNull()) {
+        QRectF target = m_targetRect.translated(0.5, 0.5);
+        QRectF source = QRectF(0, 0, m_image.width() * (1 - target.x()), m_image.height());
+        painter->drawImage(m_targetRect, m_image, source);
     }
 }
 
-void WallItem::setAnimationTime(qreal time)
+void ProjectedItem::setAnimationTime(qreal time)
 {
     QRectF rect = boundingRect();
     m_targetRect = QRectF(QPointF(rect.left() + rect.width() * time, rect.top()),
                           rect.bottomRight());
-    m_shadowItem->setRect(m_targetRect);
+    if (m_shadowItem)
+        m_shadowItem->setRect(m_targetRect);
     update();
 }
 
-static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, const QPointF &cameraPos, qreal cameraAngle, qreal time)
+void ProjectedItem::setImage(const QImage &image)
+{
+    m_image = image;
+}
+
+void ProjectedItem::updateTransform(const QPointF &cameraPos, qreal cameraAngle, qreal time)
 {
     QTransform rotation = rotatingTransform(cameraAngle);
     rotation.translate(-cameraPos.x(), -cameraPos.y());
 
-    QPointF ca = rotation.map(a);
-    QPointF cb = rotation.map(b);
+    QPointF ca = rotation.map(m_a);
+    QPointF cb = rotation.map(m_b);
 
     if (ca.y() <= 0 && cb.y() <= 0) {
-        item->setVisible(false);
+        setVisible(false);
         return;
     }
 
@@ -324,27 +358,17 @@ static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, 
     const qreal tz = 0.5 * (ca.y() + cb.y());
     const qreal fov = 0.5;
 
-    QTransform project(mx, 0, mz * fov, 0, 1, 0, tx, 0.04 * qSin(10 * time), tz * fov);
+    const QTransform project(mx, 0, mz * fov, 0, 1, 0, tx, 0.04 * qSin(10 * time), tz * fov);
 
-    item->setVisible(true);
-    item->setZValue(-tz);
-    item->setTransform(project);
+    const qreal za = QLineF(QPointF(), ca).length();
+    const qreal zb = QLineF(QPointF(), cb).length();
+    const qreal zm = QLineF(QPointF(), (ca + cb) / 2).length();
 
-    item->setDepths(QLineF(QPointF(), ca).length(), QLineF(QPointF(), cb).length());
+    setVisible(true);
+    setZValue(-zm);
+    setTransform(project);
 
-    // embed recursive scene
-    if (QGraphicsProxyWidget *child = item->childItem()) {
-        View *view = qobject_cast<View *>(child->widget());
-        if (view && !view->scene()) {
-            const char *map = "#$###"
-                              "#   #"
-                              "# @ #"
-                              "#   #"
-                              "#####";
-            MazeScene *embeddedScene = new MazeScene(map, 5, 5);
-            view->setScene(embeddedScene);
-        }
-    }
+    setDepths(za, zb);
 }
 
 void MazeScene::keyPressEvent(QKeyEvent *event)
@@ -405,8 +429,26 @@ void MazeScene::move()
 
     if (m_dirty) {
         m_dirty = false;
-        foreach (WallItem *item, m_walls)
-            updateTransform(item, item->a(), item->b(), m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+        foreach (WallItem *item, m_walls) {
+            item->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+            if (item->isVisible()) {
+                // embed recursive scene
+                if (QGraphicsProxyWidget *child = item->childItem()) {
+                    View *view = qobject_cast<View *>(child->widget());
+                    if (view && !view->scene()) {
+                        const char *map = "#$###"
+                            "#   #"
+                            "# @ #"
+                            "#   #"
+                            "#####";
+                        MazeScene *embeddedScene = new MazeScene(map, 5, 5);
+                        view->setScene(embeddedScene);
+                    }
+                }
+            }
+        }
+        foreach (Entity *entity, m_entities)
+            entity->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
         setFocusItem(0); // setVisible(true) might give focus to one of the items
         update();
     }
@@ -451,4 +493,41 @@ void MazeScene::toggleRenderer()
         view->setViewport(new QWidget);
     else
         view->setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
+}
+
+const QImage toAlpha(const QImage &image)
+{
+    if (image.isNull())
+        return image;
+    QRgb alpha = image.pixel(0, 0);
+    QImage result = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QRgb *data = reinterpret_cast<QRgb *>(result.bits());
+    int size = image.width() * image.height();
+    for (int i = 0; i < size; ++i)
+        if (data[i] == alpha)
+            data[i] = 0;
+    return result;
+}
+
+Entity::Entity(const QPointF &pos)
+    : ProjectedItem(QRectF(-0.3, -0.3, 0.6, 0.8), false)
+    , m_pos(pos)
+{
+    static QImage img = toAlpha(QImage("soldier/O01.png").convertToFormat(QImage::Format_RGB32));
+    setImage(img);
+}
+
+void Entity::updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time)
+{
+    QPointF delta = cameraPos - m_pos;
+    delta /= QLineF(QPointF(), delta).length();
+    delta = rotatingTransform(90.1).map(delta);
+    setPosition(m_pos - delta, m_pos + delta);
+    ProjectedItem::updateTransform(cameraPos, cameraRotation, time);
+}
+
+void MazeScene::addEntity(Entity *entity)
+{
+    addItem(entity);
+    m_entities << entity;
 }
