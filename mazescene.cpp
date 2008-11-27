@@ -142,8 +142,8 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
 
     QTransform project;
     const qreal fov = 0.5;
-    const qreal wallHeight = 0.5 + 0.04 * qSin(0.01 * m_walkTime);
-    const qreal ceilingHeight = -0.5 + 0.04 * qSin(0.01 * m_walkTime);
+    const qreal wallHeight = 0.5 + 0.04 * qSin(0.01 * m_walkTime) + 0.1;
+    const qreal ceilingHeight = -0.5 + 0.04 * qSin(0.01 * m_walkTime) + 0.1;
     const QRectF r(1, 1, m_width-2, m_height-2);
 
     painter->save();
@@ -274,6 +274,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     QPointF center = rect.center();
 
     scale = qMin(scale / rect.width(), scale / rect.height());
+    m_childItem->translate(0, -0.1);
     m_childItem->scale(scale, scale);
     m_childItem->translate(-center.x(), -center.y());
 }
@@ -341,6 +342,7 @@ void ProjectedItem::setAnimationTime(qreal time)
 void ProjectedItem::setImage(const QImage &image)
 {
     m_image = image;
+    update();
 }
 
 void ProjectedItem::updateTransform(const QPointF &cameraPos, qreal cameraAngle, qreal time)
@@ -362,7 +364,7 @@ void ProjectedItem::updateTransform(const QPointF &cameraPos, qreal cameraAngle,
     const qreal tz = 0.5 * (ca.y() + cb.y());
     const qreal fov = 0.5;
 
-    const QTransform project(mx, 0, mz * fov, 0, 1, 0, tx, 0.04 * qSin(10 * time), tz * fov);
+    const QTransform project(mx, 0, mz * fov, 0, 1, 0, tx, 0.04 * qSin(10 * time) + 0.1, tz * fov);
 
     const qreal za = QLineF(QPointF(), ca).length();
     const qreal zb = QLineF(QPointF(), cb).length();
@@ -578,10 +580,14 @@ const QImage toAlpha(const QImage &image)
 }
 
 Entity::Entity(const QPointF &pos)
-    : ProjectedItem(QRectF(-0.3, -0.3, 0.6, 0.8), false)
+    : ProjectedItem(QRectF(-0.3, -0.4, 0.6, 0.9), false)
     , m_pos(pos)
     , m_angle(0)
+    , m_walking(true)
+    , m_animationIndex(0)
+    , m_angleIndex(0)
 {
+    startTimer(300);
 }
 
 static QVector<QImage> loadSoldierImages()
@@ -596,19 +602,31 @@ static QVector<QImage> loadSoldierImages()
 
 void Entity::updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time)
 {
-    static QVector<QImage> images = loadSoldierImages();
-
     QPointF delta = cameraPos - m_pos;
     QLineF deltaLine(QPointF(), delta);
     qreal angleToCamera = QLineF::fromPolar(1, m_angle)
         .angleTo(deltaLine);
 
-    int angleIndex = (int(angleToCamera + 360 + 22.5) / 45) % 8;
-    setImage(images.at(angleIndex));
+    m_angleIndex = (int(angleToCamera + 360 + 22.5) / 45) % 8;
 
-    delta = QLineF::fromPolar(1, 270.1 + 45 * angleIndex).p2();
+    delta = QLineF::fromPolar(1, 270.1 + 45 * m_angleIndex).p2();
     setPosition(m_pos - delta, m_pos + delta);
     ProjectedItem::updateTransform(cameraPos, cameraRotation, time);
+}
+
+void Entity::timerEvent(QTimerEvent *)
+{
+    ++m_animationIndex;
+    updateImage();
+}
+
+void Entity::updateImage()
+{
+    static QVector<QImage> images = loadSoldierImages();
+    if (m_walking)
+        setImage(images.at(8 + 8 * (m_animationIndex % 4) + m_angleIndex));
+    else
+        setImage(images.at(m_angleIndex));
 }
 
 void MazeScene::addEntity(Entity *entity)

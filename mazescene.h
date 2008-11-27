@@ -59,7 +59,7 @@ private:
     int m_type;
 };
 
-class Entity : public ProjectedItem
+class Entity : public QObject, public ProjectedItem
 {
 public:
     Entity(const QPointF &pos);
@@ -67,9 +67,19 @@ public:
 
     QPointF pos() const { return m_pos; }
 
+protected:
+    void timerEvent(QTimerEvent *event);
+
+private:
+    void updateImage();
+
 private:
     QPointF m_pos;
     qreal m_angle;
+    bool m_walking;
+
+    int m_animationIndex;
+    int m_angleIndex;
 };
 
 class MazeScene : public QGraphicsScene
