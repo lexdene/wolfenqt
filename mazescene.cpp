@@ -389,6 +389,7 @@ void MazeScene::move()
         foreach (WallItem *item, m_walls)
             updateTransform(item, item->a(), item->b(), m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
         setFocusItem(0); // setVisible(true) might give focus to one of the items
+        update();
     }
 }
 
