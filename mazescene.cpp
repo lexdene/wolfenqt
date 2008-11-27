@@ -32,6 +32,7 @@ MazeScene::MazeScene(const char *map, int width, int height)
     : m_cameraPos(1.5, 1.5)
     , m_cameraAngle(0.1)
     , m_walkingVelocity(0)
+    , m_strafingVelocity(0)
     , m_turningVelocity(0)
     , m_simulationTime(0)
     , m_walkTime(0)
@@ -236,7 +237,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         view->setViewport(new QWidget); // no OpenGL here
         childWidget = view;
     } else if (type == 5) {
-        scene->addEntity(new Entity(QPointF(3.5, 3.5)));
+        scene->addEntity(new Entity(QPointF(3.5, 2.5)));
     } else if (type == 0 || type == 2) {
         static int index;
         if (index == 0) {
@@ -408,6 +409,10 @@ bool MazeScene::handleKey(int key, bool pressed)
     case Qt::Key_Down:
         m_walkingVelocity = (pressed ? (key == Qt::Key_Down ? -1 : 1) * 0.01 : 0.0);
         return true;
+    case Qt::Key_Z:
+    case Qt::Key_X:
+        m_strafingVelocity = (pressed ? (key == Qt::Key_Z ? -1 : 1) * 0.01 : 0.0);
+        return true;
     }
 
     return false;
@@ -499,13 +504,23 @@ void MazeScene::move()
     while (m_simulationTime <= elapsed) {
         m_cameraAngle += m_turningVelocity;
 
+        bool walking = false;
         if (m_walkingVelocity != 0) {
             QPointF walkingDir = rotatingTransform(-m_cameraAngle).map(QPointF(0, 1));
             QPointF walkingDelta = m_walkingVelocity * walkingDir;
             if (tryMove(m_cameraPos, walkingDelta))
-                m_walkTime += 5;
+                walking = true;
         }
 
+        if (m_strafingVelocity != 0) {
+            QPointF walkingDir = rotatingTransform(-m_cameraAngle).map(QPointF(1, 0));
+            QPointF walkingDelta = m_strafingVelocity * walkingDir;
+            if (tryMove(m_cameraPos, walkingDelta))
+                walking = true;
+        }
+
+        if (walking)
+            m_walkTime += 5;
         m_simulationTime += 5;
     }
 
@@ -565,16 +580,33 @@ const QImage toAlpha(const QImage &image)
 Entity::Entity(const QPointF &pos)
     : ProjectedItem(QRectF(-0.3, -0.3, 0.6, 0.8), false)
     , m_pos(pos)
+    , m_angle(0)
 {
-    static QImage img = toAlpha(QImage("soldier/O01.png").convertToFormat(QImage::Format_RGB32));
-    setImage(img);
+}
+
+static QVector<QImage> loadSoldierImages()
+{
+    QVector<QImage> images;
+    for (int i = 1; i <= 40; ++i) {
+        QImage image(QString("soldier/O%0.png").arg(i, 2, 10, QLatin1Char('0')));
+        images << toAlpha(image.convertToFormat(QImage::Format_RGB32));
+    }
+    return images;
 }
 
 void Entity::updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time)
 {
+    static QVector<QImage> images = loadSoldierImages();
+
     QPointF delta = cameraPos - m_pos;
-    delta /= QLineF(QPointF(), delta).length();
-    delta = rotatingTransform(90.1).map(delta);
+    QLineF deltaLine(QPointF(), delta);
+    qreal angleToCamera = QLineF::fromPolar(1, m_angle)
+        .angleTo(deltaLine);
+
+    int angleIndex = (int(angleToCamera + 360 + 22.5) / 45) % 8;
+    setImage(images.at(angleIndex));
+
+    delta = QLineF::fromPolar(1, 270.1 + 45 * angleIndex).p2();
     setPosition(m_pos - delta, m_pos + delta);
     ProjectedItem::updateTransform(cameraPos, cameraRotation, time);
 }

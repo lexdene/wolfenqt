@@ -69,6 +69,7 @@ public:
 
 private:
     QPointF m_pos;
+    qreal m_angle;
 };
 
 class MazeScene : public QGraphicsScene
@@ -109,6 +110,7 @@ private:
     QPointF m_cameraPos;
     qreal m_cameraAngle;
     qreal m_walkingVelocity;
+    qreal m_strafingVelocity;
     qreal m_turningVelocity;
 
     QTime m_time;
