@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QKeyEvent>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <QWebView>
 
 #include <qmath.h>
@@ -155,10 +156,10 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     static const char *urls[] =
     {
         "http://www.google.com",
-        "http://www.youtube.com",
         "http://programming.reddit.com",
         "http://www.trolltech.com",
         "http://www.planetkde.org",
+        "http://labs.trolltech.com/blogs/",
         "http://chaos.troll.no/~tavestbo/webkit"
     };
 
@@ -170,26 +171,30 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
 
     qreal scale = 0.8;
 
+    QPalette palette;
+    palette.setColor(QPalette::Window, QColor(Qt::transparent));
+
     m_childItem = 0;
     QWidget *childWidget = 0;
     if (type == 3 && a.y() == b.y()) {
-        QPushButton *button = new QPushButton("Push Me!");
+        QWidget *widget = new QWidget;
+        QPushButton *button = new QPushButton("Open Sesame");
         QObject::connect(button, SIGNAL(pressed()), scene, SLOT(toggleDoors()));
-        childWidget = button;
+        widget->setLayout(new QVBoxLayout);
+        widget->layout()->addWidget(button);
+        widget->setPalette(palette);
+        childWidget = widget;
         scale = 0.3;
     } else if (type == 0 || type == 2) {
         static int index = 0;
         if (index == 0) {
             QWidget *widget = new QWidget;
-
-            QCheckBox *checkBox = new QCheckBox("Use OpenGL", widget);
+            QCheckBox *checkBox = new QCheckBox("Use OpenGL");
             checkBox->setChecked(true);
             QObject::connect(checkBox, SIGNAL(toggled(bool)), scene, SLOT(toggleRenderer()), Qt::QueuedConnection);
-
-            QPalette palette;
-            palette.setColor(QPalette::Window, QColor(Qt::transparent));
+            widget->setLayout(new QVBoxLayout);
+            widget->layout()->addWidget(checkBox);
             widget->setPalette(palette);
-
             childWidget = widget;
             scale = 0.2;
         } else if (index < 4) {
@@ -208,7 +213,8 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
 
             childWidget = view;
         } else if (!(index % 7)) {
-            const char *url = urls[index % (sizeof(urls)/sizeof(char*))];
+            static int webIndex = 0;
+            const char *url = urls[webIndex++ % (sizeof(urls)/sizeof(char*))];
 
             QWebView *view = new QWebView;
             view->setUrl(QUrl(url));
@@ -403,6 +409,12 @@ void MazeScene::toggleDoors()
 
     if (m_doorAnimation->state() == QTimeLine::Running)
         return;
+
+    QPushButton *button = qobject_cast<QPushButton *>(QObject::sender());
+    if (m_doorAnimation->direction() == QTimeLine::Forward)
+        button->setText("Close Sesame!");
+    else
+        button->setText("Open Sesame!");
 
     m_doorAnimation->toggleDirection();
     m_doorAnimation->start();
