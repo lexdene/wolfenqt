@@ -2,6 +2,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QPointF>
+#include <QPushButton>
 #include <QTime>
 #include <QTimeLine>
 
@@ -9,6 +10,7 @@ class MazeScene;
 
 class View : public QGraphicsView
 {
+    Q_OBJECT
 public:
     View();
     void resizeEvent(QResizeEvent *event);
@@ -71,6 +73,7 @@ private:
     QVector<WallItem *> m_walls;
     QVector<WallItem *> m_doors;
     QVector<QGraphicsItem *> m_floorTiles;
+    QVector<QPushButton *> m_buttons;
 
     QPointF m_cameraPos;
     qreal m_cameraAngle;

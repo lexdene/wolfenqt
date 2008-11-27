@@ -15,7 +15,7 @@ int main(int argc, char **argv)
         "# @@ # #"
         "#      #"
         "###&%-##"
-        "#      #"
+        "$      #"
         "#&&&&&&#";
 
     MazeScene *scene = new MazeScene(map, 8, 10);

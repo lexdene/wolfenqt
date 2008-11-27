@@ -47,6 +47,7 @@ MazeScene::MazeScene(const char *map, int width, int height)
     types['&'] = 1;
     types['@'] = 2;
     types['%'] = 3;
+    types['$'] = 4;
 
     int type;
     for (int y = 0; y < height; ++y) {
@@ -86,6 +87,7 @@ MazeScene::MazeScene(const char *map, int width, int height)
 void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
 {
     WallItem *item = new WallItem(this, a, b, type);
+    item->setVisible(false);
     addItem(item);
     m_walls << item;
 
@@ -93,6 +95,12 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
         m_doors << item;
 
     setSceneRect(-1, -1, 2, 2);
+    if (item->childItem()) {
+        QObject *widget = item->childItem()->widget()->children().value(0);
+        QPushButton *button = qobject_cast<QPushButton *>(widget);
+        if (button)
+            m_buttons << button;
+    }
 }
 
 static inline QTransform rotatingTransform(qreal angle)
@@ -178,18 +186,24 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     QWidget *childWidget = 0;
     if (type == 3 && a.y() == b.y()) {
         QWidget *widget = new QWidget;
-        QPushButton *button = new QPushButton("Open Sesame");
+        QPushButton *button = new QPushButton("Open Sesame", widget);
         QObject::connect(button, SIGNAL(pressed()), scene, SLOT(toggleDoors()));
         widget->setLayout(new QVBoxLayout);
         widget->layout()->addWidget(button);
         widget->setPalette(palette);
         childWidget = widget;
         scale = 0.3;
+    } else if (type == 4) {
+        View *view = new View;
+        view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+        view->resize(480, 320); // not soo big
+        view->setViewport(new QWidget); // no OpenGL here
+        childWidget = view;
     } else if (type == 0 || type == 2) {
-        static int index = 0;
+        static int index;
         if (index == 0) {
             QWidget *widget = new QWidget;
-            QCheckBox *checkBox = new QCheckBox("Use OpenGL");
+            QCheckBox *checkBox = new QCheckBox("Use OpenGL", widget);
             checkBox->setChecked(true);
             QObject::connect(checkBox, SIGNAL(toggled(bool)), scene, SLOT(toggleRenderer()), Qt::QueuedConnection);
             widget->setLayout(new QVBoxLayout);
@@ -197,21 +211,6 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
             widget->setPalette(palette);
             childWidget = widget;
             scale = 0.2;
-        } else if (index < 4) {
-            ++index;
-            const char *map = "#####"
-                "#   #"
-                "# @ #"
-                "#   #"
-                "#####";
-            MazeScene *embeddedScene = new MazeScene(map, 5, 5);
-            View *view = new View;
-            view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
-            view->setScene(embeddedScene);
-            view->resize(480, 320); // not soo big
-            view->setViewport(new QWidget); // no OpenGL here
-
-            childWidget = view;
         } else if (!(index % 7)) {
             static int webIndex = 0;
             const char *url = urls[webIndex++ % (sizeof(urls)/sizeof(char*))];
@@ -332,6 +331,20 @@ static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, 
     item->setTransform(project);
 
     item->setDepths(QLineF(QPointF(), ca).length(), QLineF(QPointF(), cb).length());
+
+    // embed recursive scene
+    if (QGraphicsProxyWidget *child = item->childItem()) {
+        View *view = qobject_cast<View *>(child->widget());
+        if (view && !view->scene()) {
+            const char *map = "#$###"
+                              "#   #"
+                              "# @ #"
+                              "#   #"
+                              "#####";
+            MazeScene *embeddedScene = new MazeScene(map, 5, 5);
+            view->setScene(embeddedScene);
+        }
+    }
 }
 
 void MazeScene::keyPressEvent(QKeyEvent *event)
@@ -407,14 +420,17 @@ void MazeScene::toggleDoors()
         connect(m_doorAnimation, SIGNAL(valueChanged(qreal)), this, SLOT(moveDoors(qreal)));
     }
 
+    setFocusItem(0);
+
     if (m_doorAnimation->state() == QTimeLine::Running)
         return;
 
-    QPushButton *button = qobject_cast<QPushButton *>(QObject::sender());
-    if (m_doorAnimation->direction() == QTimeLine::Forward)
-        button->setText("Close Sesame!");
-    else
-        button->setText("Open Sesame!");
+    foreach (QPushButton *button, m_buttons) {
+        if (m_doorAnimation->direction() == QTimeLine::Forward)
+            button->setText("Close Sesame!");
+        else
+            button->setText("Open Sesame!");
+    }
 
     m_doorAnimation->toggleDirection();
     m_doorAnimation->start();
