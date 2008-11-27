@@ -70,6 +70,7 @@ private slots:
 private:
     QVector<WallItem *> m_walls;
     QVector<WallItem *> m_doors;
+    QVector<QGraphicsItem *> m_floorTiles;
 
     QPointF m_cameraPos;
     qreal m_cameraAngle;
@@ -81,4 +82,6 @@ private:
     long m_simulationTime;
     long m_walkTime;
     bool m_dirty;
+    int m_width;
+    int m_height;
 };

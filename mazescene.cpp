@@ -36,6 +36,8 @@ MazeScene::MazeScene(const char *map, int width, int height)
     , m_simulationTime(0)
     , m_walkTime(0)
     , m_dirty(true)
+    , m_width(width)
+    , m_height(height)
 {
     QMap<char, int> types;
     types[' '] = -2;
@@ -92,6 +94,13 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
     setSceneRect(-1, -1, 2, 2);
 }
 
+static inline QTransform rotatingTransform(qreal angle)
+{
+    QTransform transform;
+    transform.rotate(angle);
+    return transform;
+}
+
 void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
 {
     QLinearGradient g(QPointF(0, rect.top()), QPointF(0, rect.bottom()));
@@ -102,6 +111,39 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     g.setColorAt(1, QColor(0, 0, 0, 50));
     painter->fillRect(QRectF(rect.topLeft(), QPointF(rect.right(), rect.center().y())), QColor(100, 120, 200));
     painter->fillRect(QRectF(QPointF(rect.left(), rect.center().y()), rect.bottomRight()), QColor(127, 190, 100));
+
+    QTransform rotation = rotatingTransform(m_cameraAngle);
+    rotation.translate(-m_cameraPos.x(), -m_cameraPos.y());
+
+    static QImage floor = QImage("floor.gif").convertToFormat(QImage::Format_RGB32);
+    QBrush floorBrush(floor);
+
+    static QImage ceiling = QImage("ceiling.gif").convertToFormat(QImage::Format_RGB32);
+    QBrush ceilingBrush(ceiling);
+
+    QTransform brushScale;
+    brushScale.scale(0.5 / floor.width(), 0.5 / floor.height());
+    floorBrush.setTransform(brushScale);
+    ceilingBrush.setTransform(brushScale);
+
+    QTransform project;
+    const qreal fov = 0.5;
+    const qreal wallHeight = 0.5 + 0.04 * qSin(0.01 * m_walkTime);
+    const qreal ceilingHeight = -0.5 + 0.04 * qSin(0.01 * m_walkTime);
+    const QRectF r(1, 1, m_width-2, m_height-2);
+
+    painter->save();
+    project = QTransform(rotation.m11(), 0, fov * rotation.m12(), rotation.m21(), 0, fov * rotation.m22(), rotation.m31(), wallHeight, fov * rotation.m32());
+    painter->setTransform(project, true);
+    painter->fillRect(r, floorBrush);
+    painter->restore();
+
+    painter->save();
+    project = QTransform(rotation.m11(), 0, fov * rotation.m12(), rotation.m21(), 0, fov * rotation.m22(), rotation.m31(), ceilingHeight, fov * rotation.m32());
+    painter->setTransform(project, true);
+    painter->fillRect(r, ceilingBrush);
+    painter->restore();
+
     painter->fillRect(rect, g);
 }
 
@@ -258,19 +300,13 @@ void WallItem::setAnimationTime(qreal time)
     update();
 }
 
-static inline QTransform rotatingTransform(qreal angle)
-{
-    QTransform transform;
-    transform.rotate(angle);
-    return transform;
-}
-
 static void updateTransform(WallItem *item, const QPointF &a, const QPointF &b, const QPointF &cameraPos, qreal cameraAngle, qreal time)
 {
-    const QTransform rotation = rotatingTransform(cameraAngle);
+    QTransform rotation = rotatingTransform(cameraAngle);
+    rotation.translate(-cameraPos.x(), -cameraPos.y());
 
-    QPointF ca = rotation.map(a - cameraPos);
-    QPointF cb = rotation.map(b - cameraPos);
+    QPointF ca = rotation.map(a);
+    QPointF cb = rotation.map(b);
 
     if (ca.y() <= 0 && cb.y() <= 0) {
         item->setVisible(false);
