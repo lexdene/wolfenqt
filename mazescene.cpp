@@ -124,10 +124,10 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     QTransform rotation = rotatingTransform(m_cameraAngle);
     rotation.translate(-m_cameraPos.x(), -m_cameraPos.y());
 
-    static QImage floor = QImage("floor.gif").convertToFormat(QImage::Format_RGB32);
+    static QImage floor = QImage("floor.png").convertToFormat(QImage::Format_RGB32);
     QBrush floorBrush(floor);
 
-    static QImage ceiling = QImage("ceiling.gif").convertToFormat(QImage::Format_RGB32);
+    static QImage ceiling = QImage("ceiling.png").convertToFormat(QImage::Format_RGB32);
     QBrush ceilingBrush(ceiling);
 
     QTransform brushScale;
@@ -279,9 +279,9 @@ QRectF WallItem::boundingRect() const
 
 void WallItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
 {
-    static QImage brown = QImage("brown.bmp").convertToFormat(QImage::Format_RGB32);
-    static QImage book = QImage("book.gif").convertToFormat(QImage::Format_RGB32);
-    static QImage door = QImage("door.bmp").convertToFormat(QImage::Format_RGB32);
+    static QImage brown = QImage("brown.png").convertToFormat(QImage::Format_RGB32);
+    static QImage book = QImage("book.png").convertToFormat(QImage::Format_RGB32);
+    static QImage door = QImage("door.png").convertToFormat(QImage::Format_RGB32);
 
     if (m_type != 2) {
         if (m_type == 1) {
