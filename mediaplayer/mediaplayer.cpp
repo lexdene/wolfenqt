@@ -359,7 +359,7 @@ void MediaPlayer::stateChanged(Phonon::State newstate, Phonon::State oldstate)
 
 void MediaPlayer::initSettingsDialog()
 {
-    settingsDialog = new QDialog(this);
+    settingsDialog = new QDialog();
     ui = new Ui_settings();
     ui->setupUi(settingsDialog);
 
@@ -618,7 +618,7 @@ void MediaPlayer::setFile(const QString &fileName)
 
 void MediaPlayer::openFile()
 {
-    QStringList fileNames = QFileDialog::getOpenFileNames(this);
+    QStringList fileNames = QFileDialog::getOpenFileNames();
     m_MediaObject.clearQueue();
     if (fileNames.size() > 0) {
         QString fileName = fileNames[0];
@@ -769,7 +769,7 @@ void MediaPlayer::openUrl()
     QSettings settings;
     settings.beginGroup(QLatin1String("BrowserMainWindow"));
     QString sourceURL = settings.value("location").toString();
-    sourceURL = QInputDialog::getText(this, tr("Open Location"), tr("Please enter a valid address here:"), QLineEdit::Normal, sourceURL);
+    sourceURL = QInputDialog::getText(0, tr("Open Location"), tr("Please enter a valid address here:"), QLineEdit::Normal, sourceURL);
     if (!sourceURL.isEmpty()) {
 	    setWindowTitle(sourceURL.right(sourceURL.length() - sourceURL.lastIndexOf('/') - 1));
 	    m_MediaObject.setCurrentSource(Phonon::MediaSource(QUrl::fromEncoded(sourceURL.toUtf8())));

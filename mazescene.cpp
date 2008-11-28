@@ -278,6 +278,8 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     if (!childWidget)
         return;
 
+    childWidget->installEventFilter(scene);
+
     m_childItem = new QGraphicsProxyWidget(this);
     m_childItem->setWidget(childWidget);
     m_childItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
@@ -289,6 +291,36 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     m_childItem->translate(0, -0.05);
     m_childItem->scale(scale, scale);
     m_childItem->translate(-center.x(), -center.y());
+}
+
+bool MazeScene::eventFilter(QObject *target, QEvent *event)
+{
+    QWidget *widget = qobject_cast<QWidget *>(target);
+    if (!widget || event->type() != QEvent::Resize)
+        return false;
+
+    foreach (WallItem *item, m_walls) {
+        QGraphicsProxyWidget *proxy = item->childItem();
+        if (!proxy)
+            continue;
+        if (proxy->widget() == widget) {
+            QRectF rect = proxy->boundingRect();
+
+            if (QRectF(-0.5, -0.5, 1, 1).contains(proxy->mapToParent(rect).boundingRect()))
+                continue;
+
+            QPointF center = rect.center();
+
+            qreal scale = qMin(0.8 / rect.width(), 0.8 / rect.height());
+            proxy->resetMatrix();
+            proxy->translate(0, -0.05);
+            proxy->scale(scale, scale);
+            proxy->translate(-center.x(), -center.y());
+            break;
+        }
+    }
+
+    return false;
 }
 
 void ProjectedItem::setDepths(qreal za, qreal zb)
