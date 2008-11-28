@@ -849,6 +849,7 @@ void ScriptWidget::display(QScriptValue value)//const QString &string)
 
 void ScriptWidget::updateSource()
 {
+    m_time.restart();
     m_source = m_sourceEdit->toPlainText();
     if (m_engine->canEvaluate(m_source))
         m_statusView->setText(QLatin1String("Evaluation succeeded"));
