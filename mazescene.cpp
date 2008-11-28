@@ -43,6 +43,7 @@ MazeScene::MazeScene(const char *map, int width, int height)
     , m_walkTime(0)
     , m_width(width)
     , m_height(height)
+    , m_player(0)
 {
     m_doorAnimation = new QTimeLine(1000, this);
     m_doorAnimation->setUpdateInterval(20);
@@ -98,6 +99,10 @@ MazeScene::MazeScene(const char *map, int width, int height)
 void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
 {
     WallItem *item = new WallItem(this, a, b, type);
+    if (item->type() == 7) {
+        m_playerPos = (a + b ) / 2;
+        m_player = static_cast<MediaPlayer *>(item->childItem()->widget());
+    }
     item->setVisible(false);
     addItem(item);
     m_walls << item;
@@ -249,6 +254,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
 #ifdef USE_PHONON
         Q_INIT_RESOURCE(mediaplayer);
         childWidget = new MediaPlayer(QString());
+        scale = 0.6;
 #endif
     } else if (type == 0 || type == 2) {
         static int index;
@@ -316,6 +322,10 @@ bool MazeScene::eventFilter(QObject *target, QEvent *event)
             proxy->translate(0, -0.05);
             proxy->scale(scale, scale);
             proxy->translate(-center.x(), -center.y());
+
+            // refresh cache size
+            proxy->setCacheMode(QGraphicsItem::NoCache);
+            proxy->setCacheMode(QGraphicsItem::ItemCoordinateCache);
             break;
         }
     }
@@ -543,6 +553,13 @@ void MazeScene::updateTransforms()
     }
     foreach (Entity *entity, m_entities)
         entity->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+
+#ifdef USE_PHONON
+    if (m_player) {
+        qreal distance = QLineF(m_cameraPos, m_playerPos).length();
+        m_player->setVolume(qPow(2, -0.6 * distance));
+    }
+#endif
     setFocusItem(0); // setVisible(true) might give focus to one of the items
     update();
 }

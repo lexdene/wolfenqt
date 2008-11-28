@@ -152,7 +152,6 @@ MediaPlayer::MediaPlayer(const QString &filePath) :
 
     slider = new Phonon::SeekSlider(this);
     slider->setMediaObject(&m_MediaObject);
-    volume = new Phonon::VolumeSlider(&m_AudioOutput);
  
     QVBoxLayout *vLayout = new QVBoxLayout(this);
     vLayout->setContentsMargins(8, 8, 8, 8);    
@@ -179,15 +178,12 @@ MediaPlayer::MediaPlayer(const QString &filePath) :
     info->setPalette(palette);
     info->setText(tr("<center>No media</center>"));
 
-    volume->setFixedWidth(120);
-
     layout->addWidget(openButton);
     layout->addWidget(rewindButton);
     layout->addWidget(playButton);
     layout->addWidget(forwardButton);
 
     layout->addStretch();
-    layout->addWidget(volume);
 
     vLayout->addWidget(info);
     initVideoWindow();
@@ -805,5 +801,10 @@ void MediaPlayer::aspectChanged(QAction *act)
         m_videoWidget->setAspectRatio(Phonon::VideoWidget::AspectRatio4_3);
     else
         m_videoWidget->setAspectRatio(Phonon::VideoWidget::AspectRatioAuto);    
+}
+
+void MediaPlayer::setVolume(qreal v)
+{
+    m_AudioOutput.setVolume(v);
 }
 

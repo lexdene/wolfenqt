@@ -11,6 +11,7 @@
 #include <QScriptEngine>
 
 class MazeScene;
+class MediaPlayer;
 
 class View : public QGraphicsView
 {
@@ -153,6 +154,8 @@ private:
     long m_walkTime;
     int m_width;
     int m_height;
+    MediaPlayer *m_player;
+    QPointF m_playerPos;
 };
 
 class ScriptWidget : public QWidget

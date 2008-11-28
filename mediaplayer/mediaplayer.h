@@ -42,6 +42,7 @@ public:
     void setFile(const QString &text);
     void initVideoWindow();
     void initSettingsDialog();
+    void setVolume(qreal volume);
     
 public slots:
     void openFile();
@@ -79,7 +80,6 @@ private:
     Phonon::SeekSlider *slider;
     QLabel *timeLabel;
     QLabel *progressLabel;
-    Phonon::VolumeSlider *volume;
     QSlider *m_hueSlider;
     QSlider *m_satSlider;
     QSlider *m_contSlider;
