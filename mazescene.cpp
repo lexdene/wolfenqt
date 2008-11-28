@@ -1,6 +1,7 @@
 #include "mazescene.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QGLWidget>
 #include <QGraphicsProxyWidget>
 #include <QPainter>
@@ -723,29 +724,54 @@ void MazeScene::addEntity(Entity *entity)
     m_entities << entity;
 }
 
-const char *defaultSource =
-    "// available functions:\n"
-    "// entity.turnLeft()\n"
-    "// entity.turnRight()\n"
-    "// entity.turnTowards(x, y)\n"
-    "// entity.walk()\n"
-    "// entity.stop()\n"
-    "// rand()\n"
-    "// script.display()\n"
-    "\n"
-    "// available variables:\n"
-    "// my_x\n"
-    "// my_y\n"
-    "// player_x\n"
-    "// player_y\n"
-    "// time\n"
-    "\n"
-    "entity.stop();\n";
-
 static QScriptValue qsRand(QScriptContext *, QScriptEngine *engine)
 {
     QScriptValue value(engine, qrand() / (RAND_MAX + 1.0));
     return value;
+}
+
+void ScriptWidget::setPreset(int preset)
+{
+    const char *presets[] =
+    {
+        "// available functions:\n"
+        "// entity.turnLeft()\n"
+        "// entity.turnRight()\n"
+        "// entity.turnTowards(x, y)\n"
+        "// entity.walk()\n"
+        "// entity.stop()\n"
+        "// rand()\n"
+        "// script.display()\n"
+        "\n"
+        "// available variables:\n"
+        "// my_x\n"
+        "// my_y\n"
+        "// player_x\n"
+        "// player_y\n"
+        "// time\n"
+        "\n"
+        "entity.stop();\n",
+        "entity.walk();\n"
+        "if ((time % 20000) < 10000) {\n"
+        "  entity.turnTowards(10, 2.5);\n"
+        "  if (my_x >= 5.5)\n"
+        "    entity.stop();\n"
+        "} else {\n"
+        "  entity.turnTowards(-10, 2.5);\n"
+        "  if (my_x <= 2.5)\n"
+        "    entity.stop();\n"
+        "}\n",
+        "dx = player_x - my_x;\n"
+        "dy = player_y - my_y;\n"
+        "if (dx * dx + dy * dy < 5) {\n"
+        "  entity.stop();\n"
+        "} else {\n"
+        "  entity.walk();\n"
+        "  entity.turnTowards(player_x, player_y);\n"
+        "}\n"
+    };
+
+    m_sourceEdit->setPlainText(QLatin1String(presets[preset]));
 }
 
 ScriptWidget::ScriptWidget(MazeScene *scene, Entity *entity)
@@ -759,12 +785,20 @@ ScriptWidget::ScriptWidget(MazeScene *scene, Entity *entity)
     layout()->addWidget(m_statusView);
 
     m_sourceEdit = new QPlainTextEdit;
-    m_sourceEdit->setPlainText(QLatin1String(defaultSource));
     layout()->addWidget(m_sourceEdit);
 
     QPushButton *compileButton = new QPushButton(QLatin1String("Compile"));
     layout()->addWidget(compileButton);
 
+    QComboBox *combo = new QComboBox;
+    layout()->addWidget(combo);
+
+    combo->addItem(QLatin1String("Default"));
+    combo->addItem(QLatin1String("Patrol"));
+    combo->addItem(QLatin1String("Follow"));
+
+    setPreset(0);
+    connect(combo, SIGNAL(currentIndexChanged(int)), this, SLOT(setPreset(int)));
     connect(compileButton, SIGNAL(clicked()), this, SLOT(updateSource()));
 
     m_engine = new QScriptEngine(this);

@@ -165,6 +165,7 @@ public slots:
 
 private slots:
     void updateSource();
+    void setPreset(int preset);
 
 protected:
     void timerEvent(QTimerEvent *event);
