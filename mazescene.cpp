@@ -237,7 +237,9 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         view->setViewport(new QWidget); // no OpenGL here
         childWidget = view;
     } else if (type == 5) {
-        scene->addEntity(new Entity(QPointF(3.5, 2.5)));
+        Entity *entity = new Entity(QPointF(6.5, 2.5));
+        scene->addEntity(entity);
+        childWidget = new ScriptWidget(scene, entity);
     } else if (type == 0 || type == 2) {
         static int index;
         if (index == 0) {
@@ -274,7 +276,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     QPointF center = rect.center();
 
     scale = qMin(scale / rect.width(), scale / rect.height());
-    m_childItem->translate(0, -0.1);
+    m_childItem->translate(0, -0.05);
     m_childItem->scale(scale, scale);
     m_childItem->translate(-center.x(), -center.y());
 }
@@ -425,9 +427,9 @@ static inline QRectF rectFromPoint(const QPointF &point, qreal size)
     return QRectF(point, point).adjusted(-size/2, -size/2, size/2, size/2);
 }
 
-bool MazeScene::blocked(const QPointF &pos) const
+bool MazeScene::blocked(const QPointF &pos, Entity *me) const
 {
-    const QRectF rect = rectFromPoint(pos, 0.4);
+    const QRectF rect = rectFromPoint(pos, me ? 0.7 : 0.25);
 
     foreach (WallItem *item, m_walls) {
         if (item->type() == 6
@@ -445,29 +447,35 @@ bool MazeScene::blocked(const QPointF &pos) const
     }
 
     foreach (Entity *entity, m_entities) {
-        QRectF entityRect = rectFromPoint(entity->pos(), 0.4);
+        if (entity == me)
+            continue;
+        QRectF entityRect = rectFromPoint(entity->pos(), 0.8);
 
         if (entityRect.intersects(rect))
+            return true;
+    }
+
+    if (me) {
+        QRectF cameraRect = rectFromPoint(m_cameraPos, 0.4);
+
+        if (cameraRect.intersects(rect))
             return true;
     }
 
     return false;
 }
 
-bool MazeScene::tryMove(QPointF &pos, const QPointF &delta) const
+bool MazeScene::tryMove(QPointF &pos, const QPointF &delta, Entity *entity) const
 {
-    bool moved = false;
-    if (!blocked(pos + QPointF(delta.x(), 0))) {
+    const QPointF old = pos;
+
+    if (delta.x() != 0 && !blocked(pos + QPointF(delta.x(), 0), entity))
         pos.setX(pos.x() + delta.x());
-        moved = true;
-    }
 
-    if (!blocked(pos + QPointF(0, delta.y()))) {
+    if (delta.y() != 0 && !blocked(pos + QPointF(0, delta.y()), entity))
         pos.setY(pos.y() + delta.y());
-        moved = true;
-    }
 
-    return moved;
+    return pos != old;
 }
 
 void MazeScene::updateTransforms()
@@ -499,35 +507,43 @@ void MazeScene::updateTransforms()
 
 void MazeScene::move()
 {
-    qreal oldCameraAngle = m_cameraAngle;
-    QPointF oldCameraPos = m_cameraPos;
-
+    QSet<Entity *> movedEntities;
     long elapsed = m_time.elapsed();
+    bool walked = false;
     while (m_simulationTime <= elapsed) {
         m_cameraAngle += m_turningVelocity;
 
         bool walking = false;
         if (m_walkingVelocity != 0) {
-            QPointF walkingDir = rotatingTransform(-m_cameraAngle).map(QPointF(0, 1));
-            QPointF walkingDelta = m_walkingVelocity * walkingDir;
+            QPointF walkingDelta = QLineF::fromPolar(m_walkingVelocity, m_cameraAngle - 90).p2();
             if (tryMove(m_cameraPos, walkingDelta))
                 walking = true;
         }
 
         if (m_strafingVelocity != 0) {
-            QPointF walkingDir = rotatingTransform(-m_cameraAngle).map(QPointF(1, 0));
-            QPointF walkingDelta = m_strafingVelocity * walkingDir;
+            QPointF walkingDelta = QLineF::fromPolar(m_strafingVelocity, m_cameraAngle).p2();
             if (tryMove(m_cameraPos, walkingDelta))
                 walking = true;
         }
 
+        walked = walked || walking;
+
         if (walking)
             m_walkTime += 5;
         m_simulationTime += 5;
+
+        foreach (Entity *entity, m_entities) {
+            if (entity->move(this))
+                movedEntities.insert(entity);
+        }
     }
 
-    if (oldCameraAngle != m_cameraAngle || oldCameraPos != m_cameraPos)
+    if (walked || m_turningVelocity != 0) {
         updateTransforms();
+    } else {
+        foreach (Entity *entity, movedEntities)
+            entity->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+    }
 }
 
 void MazeScene::toggleDoors()
@@ -582,12 +598,45 @@ const QImage toAlpha(const QImage &image)
 Entity::Entity(const QPointF &pos)
     : ProjectedItem(QRectF(-0.3, -0.4, 0.6, 0.9), false)
     , m_pos(pos)
-    , m_angle(0)
-    , m_walking(true)
+    , m_angle(180)
+    , m_walking(false)
+    , m_walked(false)
+    , m_turnVelocity(0)
+    , m_useTurnTarget(false)
     , m_animationIndex(0)
     , m_angleIndex(0)
 {
     startTimer(300);
+}
+
+void Entity::walk()
+{
+    m_walking = true;
+}
+
+void Entity::stop()
+{
+    m_walking = false;
+    m_useTurnTarget = false;
+    m_turnVelocity = 0;
+}
+
+void Entity::turnTowards(qreal x, qreal y)
+{
+    m_turnTarget = QPointF(x, y);
+    m_useTurnTarget = true;
+}
+
+void Entity::turnLeft()
+{
+    m_useTurnTarget = false;
+    m_turnVelocity = 0.5;
+}
+
+void Entity::turnRight()
+{
+    m_useTurnTarget = false;
+    m_turnVelocity = -0.5;
 }
 
 static QVector<QImage> loadSoldierImages()
@@ -600,18 +649,57 @@ static QVector<QImage> loadSoldierImages()
     return images;
 }
 
+static inline int mod(int x, int y)
+{
+    return ((x % y) + y) % y;
+}
+
 void Entity::updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time)
 {
-    QPointF delta = cameraPos - m_pos;
-    QLineF deltaLine(QPointF(), delta);
-    qreal angleToCamera = QLineF::fromPolar(1, m_angle)
-        .angleTo(deltaLine);
+    qreal angleToCamera = QLineF(m_pos, cameraPos).angle();
+    int cameraAngleIndex = mod(qRound(angleToCamera + 22.5), 360) / 45;
 
-    m_angleIndex = (int(angleToCamera + 360 + 22.5) / 45) % 8;
+    m_angleIndex = mod(qRound(cameraAngleIndex * 45 - m_angle + 22.5), 360) / 45;
 
-    delta = QLineF::fromPolar(1, 270.1 + 45 * m_angleIndex).p2();
+    QPointF delta = QLineF::fromPolar(1, 270.1 + 45 * cameraAngleIndex).p2();
     setPosition(m_pos - delta, m_pos + delta);
+
+    updateImage();
     ProjectedItem::updateTransform(cameraPos, cameraRotation, time);
+}
+
+bool Entity::move(MazeScene *scene)
+{
+    bool moved = false;
+    if (m_useTurnTarget) {
+        qreal angleToTarget = QLineF::fromPolar(1, m_angle)
+            .angleTo(QLineF(m_pos, m_turnTarget));
+
+        if (angleToTarget != 0) {
+            if (angleToTarget >= 180)
+                angleToTarget -= 360;
+
+            if (angleToTarget < 0)
+                m_angle -= qMin(-angleToTarget, 0.5);
+            else
+                m_angle += qMin(angleToTarget, 0.5);
+            moved = true;
+        }
+    } else if (m_turnVelocity != 0) {
+        m_angle += m_turnVelocity;
+        moved = true;
+    }
+
+    m_walked = false;
+    if (m_walking) {
+        QPointF walkingDelta = QLineF::fromPolar(0.006, m_angle).p2();
+        if (scene->tryMove(m_pos, walkingDelta, this)) {
+            moved = true;
+            m_walked = true;
+        }
+    }
+
+    return moved;
 }
 
 void Entity::timerEvent(QTimerEvent *)
@@ -623,7 +711,7 @@ void Entity::timerEvent(QTimerEvent *)
 void Entity::updateImage()
 {
     static QVector<QImage> images = loadSoldierImages();
-    if (m_walking)
+    if (m_walked)
         setImage(images.at(8 + 8 * (m_animationIndex % 4) + m_angleIndex));
     else
         setImage(images.at(m_angleIndex));
@@ -633,4 +721,103 @@ void MazeScene::addEntity(Entity *entity)
 {
     addItem(entity);
     m_entities << entity;
+}
+
+const char *defaultSource =
+    "// available functions:\n"
+    "// entity.turnLeft()\n"
+    "// entity.turnRight()\n"
+    "// entity.turnTowards(x, y)\n"
+    "// entity.walk()\n"
+    "// entity.stop()\n"
+    "// rand()\n"
+    "// script.display()\n"
+    "\n"
+    "// available variables:\n"
+    "// my_x\n"
+    "// my_y\n"
+    "// player_x\n"
+    "// player_y\n"
+    "// time\n"
+    "\n"
+    "entity.stop();\n";
+
+static QScriptValue qsRand(QScriptContext *, QScriptEngine *engine)
+{
+    QScriptValue value(engine, qrand() / (RAND_MAX + 1.0));
+    return value;
+}
+
+ScriptWidget::ScriptWidget(MazeScene *scene, Entity *entity)
+    : m_scene(scene)
+    , m_entity(entity)
+{
+    new QVBoxLayout(this);
+
+    m_statusView = new QLineEdit;
+    m_statusView->setReadOnly(true);
+    layout()->addWidget(m_statusView);
+
+    m_sourceEdit = new QPlainTextEdit;
+    m_sourceEdit->setPlainText(QLatin1String(defaultSource));
+    layout()->addWidget(m_sourceEdit);
+
+    QPushButton *compileButton = new QPushButton(QLatin1String("Compile"));
+    layout()->addWidget(compileButton);
+
+    connect(compileButton, SIGNAL(clicked()), this, SLOT(updateSource()));
+
+    m_engine = new QScriptEngine(this);
+    QScriptValue entityObject = m_engine->newQObject(m_entity);
+    m_engine->globalObject().setProperty("entity", entityObject);
+    QScriptValue widgetObject = m_engine->newQObject(this);
+    m_engine->globalObject().setProperty("script", widgetObject);
+    m_engine->globalObject().setProperty("rand", m_engine->newFunction(qsRand));
+
+    m_engine->setProcessEventsInterval(5);
+
+    resize(300, 400);
+    updateSource();
+
+    startTimer(50);
+    m_time.start();
+}
+
+void ScriptWidget::timerEvent(QTimerEvent *event)
+{
+    m_engine->abortEvaluation();
+    QPointF player = m_scene->cameraPosition();
+    QPointF entity = m_entity->pos();
+
+    QScriptValue px(m_engine, player.x());
+    QScriptValue py(m_engine, player.y());
+    QScriptValue ex(m_engine, entity.x());
+    QScriptValue ey(m_engine, entity.y());
+    QScriptValue time(m_engine, m_time.elapsed());
+
+    m_engine->globalObject().setProperty("player_x", px);
+    m_engine->globalObject().setProperty("player_y", py);
+    m_engine->globalObject().setProperty("my_x", ex);
+    m_engine->globalObject().setProperty("my_y", ey);
+    m_engine->globalObject().setProperty("time", time);
+
+    m_engine->evaluate(m_source);
+    if (m_engine->hasUncaughtException()) {
+        QString text = m_engine->uncaughtException().toString();
+        m_statusView->setText(text);
+    }
+}
+
+void ScriptWidget::display(QScriptValue value)//const QString &string)
+{
+    m_statusView->setText(value.toString());
+}
+
+void ScriptWidget::updateSource()
+{
+    m_source = m_sourceEdit->toPlainText();
+    if (m_engine->canEvaluate(m_source))
+        m_statusView->setText(QLatin1String("Evaluation succeeded"));
+    else
+        m_statusView->setText(QLatin1String("Evaluation failed"));
 }

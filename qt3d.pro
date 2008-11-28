@@ -7,8 +7,7 @@ TARGET =
 DEPENDPATH += .
 INCLUDEPATH += .
 
-QT += webkit
-QT += opengl
+QT += webkit opengl script
 
 # Input
 HEADERS += mazescene.h

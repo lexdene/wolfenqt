@@ -1,10 +1,14 @@
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPointF>
 #include <QPushButton>
 #include <QTime>
 #include <QTimeLine>
+
+#include <QScriptEngine>
 
 class MazeScene;
 
@@ -61,11 +65,21 @@ private:
 
 class Entity : public QObject, public ProjectedItem
 {
+    Q_OBJECT
 public:
     Entity(const QPointF &pos);
     void updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time);
 
     QPointF pos() const { return m_pos; }
+
+    bool move(MazeScene *scene);
+
+public slots:
+    void turnTowards(qreal x, qreal y);
+    void turnLeft();
+    void turnRight();
+    void walk();
+    void stop();
 
 protected:
     void timerEvent(QTimerEvent *event);
@@ -77,6 +91,12 @@ private:
     QPointF m_pos;
     qreal m_angle;
     bool m_walking;
+    bool m_walked;
+
+    qreal m_turnVelocity;
+    QPointF m_turnTarget;
+
+    bool m_useTurnTarget;
 
     int m_animationIndex;
     int m_angleIndex;
@@ -91,6 +111,10 @@ public:
     void addEntity(Entity *entity);
     void addWall(const QPointF &a, const QPointF &b, int type);
     void drawBackground(QPainter *painter, const QRectF &rect);
+
+    bool tryMove(QPointF &pos, const QPointF &delta, Entity *entity = 0) const;
+
+    QPointF cameraPosition() { return m_cameraPos; }
 
 protected:
     void keyPressEvent(QKeyEvent *event);
@@ -107,8 +131,7 @@ private slots:
     void moveDoors(qreal value);
 
 private:
-    bool blocked(const QPointF &pos) const;
-    bool tryMove(QPointF &pos, const QPointF &delta) const;
+    bool blocked(const QPointF &pos, Entity *entity) const;
     void updateTransforms();
 
     QVector<WallItem *> m_walls;
@@ -129,4 +152,29 @@ private:
     long m_walkTime;
     int m_width;
     int m_height;
+};
+
+class ScriptWidget : public QWidget
+{
+    Q_OBJECT
+public:
+    ScriptWidget(MazeScene *scene, Entity *entity);
+
+public slots:
+    void display(QScriptValue value);
+
+private slots:
+    void updateSource();
+
+protected:
+    void timerEvent(QTimerEvent *event);
+
+private:
+    MazeScene *m_scene;
+    Entity *m_entity;
+    QScriptEngine *m_engine;
+    QPlainTextEdit *m_sourceEdit;
+    QLineEdit *m_statusView;
+    QString m_source;
+    QTime m_time;
 };

@@ -7,11 +7,11 @@ int main(int argc, char **argv)
     QPixmapCache::setCacheLimit(100 * 1024); // 100 MB
 
     const char *map =
-        "###&####"
+        "###&?###"
         "#      #"
         "&      #"
         "#      #"
-        "# ##?# #"
+        "# #### #"
         "&    # #"
         "# @@   &"
         "# @@ # #"
