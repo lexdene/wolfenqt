@@ -819,7 +819,6 @@ ScriptWidget::ScriptWidget(MazeScene *scene, Entity *entity)
 
 void ScriptWidget::timerEvent(QTimerEvent *event)
 {
-    m_engine->abortEvaluation();
     QPointF player = m_scene->cameraPosition();
     QPointF entity = m_entity->pos();
 
@@ -849,9 +848,15 @@ void ScriptWidget::display(QScriptValue value)//const QString &string)
 
 void ScriptWidget::updateSource()
 {
+    bool wasEvaluating = m_engine->isEvaluating();
+    if (wasEvaluating)
+        m_engine->abortEvaluation();
+
     m_time.restart();
     m_source = m_sourceEdit->toPlainText();
-    if (m_engine->canEvaluate(m_source))
+    if (wasEvaluating)
+        m_statusView->setText(QLatin1String("Aborted long running evaluation!"));
+    else if (m_engine->canEvaluate(m_source))
         m_statusView->setText(QLatin1String("Evaluation succeeded"));
     else
         m_statusView->setText(QLatin1String("Evaluation failed"));
