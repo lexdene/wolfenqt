@@ -14,6 +14,10 @@
 #include <qmath.h>
 #include <qdebug.h>
 
+#ifdef USE_PHONON
+#include "mediaplayer/mediaplayer.h"
+#endif
+
 View::View()
 {
     resize(1024, 768);
@@ -54,6 +58,7 @@ MazeScene::MazeScene(const char *map, int width, int height)
     types['$'] = 4;
     types['?'] = 5;
     types['!'] = 6;
+    types['='] = 7;
 
     int type;
     for (int y = 0; y < height; ++y) {
@@ -211,8 +216,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         "http://programming.reddit.com",
         "http://www.trolltech.com",
         "http://www.planetkde.org",
-        "http://labs.trolltech.com/blogs/",
-        "http://chaos.troll.no/~tavestbo/webkit"
+        "http://labs.trolltech.com/blogs/"
     };
 
     qreal scale = 0.8;
@@ -241,6 +245,11 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         Entity *entity = new Entity(QPointF(6.5, 2.5));
         scene->addEntity(entity);
         childWidget = new ScriptWidget(scene, entity);
+    } else if (type == 7) {
+#ifdef USE_PHONON
+        Q_INIT_RESOURCE(mediaplayer);
+        childWidget = new MediaPlayer(QString());
+#endif
     } else if (type == 0 || type == 2) {
         static int index;
         if (index == 0) {
@@ -841,7 +850,7 @@ void ScriptWidget::timerEvent(QTimerEvent *event)
     }
 }
 
-void ScriptWidget::display(QScriptValue value)//const QString &string)
+void ScriptWidget::display(QScriptValue value)
 {
     m_statusView->setText(value.toString());
 }
