@@ -458,16 +458,26 @@ bool MazeScene::handleKey(int key, bool pressed)
 
     switch (key) {
     case Qt::Key_Left:
+    case Qt::Key_Q:
+        m_turningVelocity = (pressed ? -0.5 : 0.0);
+        return true;
     case Qt::Key_Right:
-        m_turningVelocity = (pressed ? (key == Qt::Key_Left ? -1 : 1) * 0.5 : 0.0);
+    case Qt::Key_E:
+        m_turningVelocity = (pressed ? 0.5 : 0.0);
+        return true;
+    case Qt::Key_Down:
+    case Qt::Key_S:
+        m_walkingVelocity = (pressed ? -0.01 : 0.0);
         return true;
     case Qt::Key_Up:
-    case Qt::Key_Down:
-        m_walkingVelocity = (pressed ? (key == Qt::Key_Down ? -1 : 1) * 0.01 : 0.0);
+    case Qt::Key_W:
+        m_walkingVelocity = (pressed ? 0.01 : 0.0);
         return true;
-    case Qt::Key_Z:
-    case Qt::Key_X:
-        m_strafingVelocity = (pressed ? (key == Qt::Key_Z ? -1 : 1) * 0.01 : 0.0);
+    case Qt::Key_A:
+        m_strafingVelocity = (pressed ? -0.01 : 0.0);
+        return true;
+    case Qt::Key_D:
+        m_strafingVelocity = (pressed ? 0.01 : 0.0);
         return true;
     }
 
@@ -689,13 +699,13 @@ void Entity::turnTowards(qreal x, qreal y)
 void Entity::turnLeft()
 {
     m_useTurnTarget = false;
-    m_turnVelocity = 0.5;
+    m_turnVelocity = -0.5;
 }
 
 void Entity::turnRight()
 {
     m_useTurnTarget = false;
-    m_turnVelocity = -0.5;
+    m_turnVelocity = 0.5;
 }
 
 static QVector<QImage> loadSoldierImages()
