@@ -53,17 +53,19 @@ qreal Light::intensityAt(const QPointF &pos) const
 
 MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, int height)
     : m_lights(lights)
-    , m_cameraPos(1.5, 1.5)
-    , m_cameraAngle(0.1)
     , m_walkingVelocity(0)
     , m_strafingVelocity(0)
-    , m_turningVelocity(0)
+    , m_turningSpeed(0)
+    , m_pitchSpeed(0)
     , m_simulationTime(0)
     , m_walkTime(0)
     , m_width(width)
     , m_height(height)
     , m_player(0)
 {
+    m_camera.setPos(QPointF(1.5, 1.5));
+    m_camera.setYaw(0.1);
+
     m_doorAnimation = new QTimeLine(1000, this);
     m_doorAnimation->setUpdateInterval(20);
     connect(m_doorAnimation, SIGNAL(valueChanged(qreal)), this, SLOT(moveDoors(qreal)));
@@ -178,13 +180,14 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     const QRectF r(1, 1, m_width-2, m_height-2);
 
     Matrix4x4 m;
-    m *= Matrix4x4::fromRotation(m_cameraAngle, Qt::YAxis);
+    m *= Matrix4x4::fromRotation(m_camera.yaw(), Qt::YAxis);
+    m *= Matrix4x4::fromRotation(m_camera.pitch(), Qt::XAxis);
     m *= Matrix4x4::fromProjection(0.5);
 
     qreal heightOffset = 0.04 * qSin(0.01 * m_walkTime) + 0.1;
 
     Matrix4x4 floorMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
-    floorMatrix *= Matrix4x4::fromTranslation(-m_cameraPos.x(), heightOffset + 0.5, -m_cameraPos.y());
+    floorMatrix *= Matrix4x4::fromTranslation(-m_camera.pos().x(), heightOffset + 0.5, -m_camera.pos().y());
     floorMatrix *= m;
 
     painter->save();
@@ -193,7 +196,7 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     painter->restore();
 
     Matrix4x4 ceilingMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
-    ceilingMatrix *= Matrix4x4::fromTranslation(-m_cameraPos.x(), heightOffset - 0.5, -m_cameraPos.y());
+    ceilingMatrix *= Matrix4x4::fromTranslation(-m_camera.pos().x(), heightOffset - 0.5, -m_camera.pos().y());
     ceilingMatrix *= m;
 
     painter->save();
@@ -428,15 +431,15 @@ void ProjectedItem::setImage(const QImage &image)
     update();
 }
 
-void ProjectedItem::updateTransform(const QPointF &cameraPos, qreal cameraAngle, qreal time)
+void ProjectedItem::updateTransform(const Camera &camera, qreal time)
 {
     QTransform rotation;
-    rotation *= QTransform().translate(-cameraPos.x(), -cameraPos.y());
-    rotation *= rotatingTransform(cameraAngle);
+    rotation *= QTransform().translate(-camera.pos().x(), -camera.pos().y());
+    rotation *= rotatingTransform(camera.yaw());
+    QPointF center = (m_a + m_b) / 2;
 
     QPointF ca = rotation.map(m_a);
     QPointF cb = rotation.map(m_b);
-    qreal zm = QLineF(QPointF(), (ca + cb) / 2).length();
 
     if (ca.y() <= 0 && cb.y() <= 0) {
         setVisible(false);
@@ -444,13 +447,15 @@ void ProjectedItem::updateTransform(const QPointF &cameraPos, qreal cameraAngle,
     }
 
     const qreal fov = 0.5;
-    QPointF center = (m_a + m_b) / 2;
 
     Matrix4x4 m;
     m *= Matrix4x4::fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis);
-    m *= Matrix4x4::fromTranslation(center.x() - cameraPos.x(), 0.04 * qSin(10 * time) + 0.1, center.y() - cameraPos.y());
-    m *= Matrix4x4::fromRotation(cameraAngle, Qt::YAxis);
+    m *= Matrix4x4::fromTranslation(center.x() - camera.pos().x(), 0.04 * qSin(10 * time) + 0.1, center.y() - camera.pos().y());
+    m *= Matrix4x4::fromRotation(camera.yaw(), Qt::YAxis);
+    m *= Matrix4x4::fromRotation(camera.pitch(), Qt::XAxis);
     m *= Matrix4x4::fromProjection(fov);
+
+    qreal zm = QLineF(camera.pos(), center).length();
 
     setVisible(true);
     setZValue(-zm);
@@ -485,17 +490,21 @@ bool MazeScene::handleKey(int key, bool pressed)
     switch (key) {
     case Qt::Key_Left:
     case Qt::Key_Q:
-        m_turningVelocity = (pressed ? -0.5 : 0.0);
+        m_turningSpeed = (pressed ? -0.5 : 0.0);
         return true;
     case Qt::Key_Right:
     case Qt::Key_E:
-        m_turningVelocity = (pressed ? 0.5 : 0.0);
+        m_turningSpeed = (pressed ? 0.5 : 0.0);
         return true;
     case Qt::Key_Down:
+        m_pitchSpeed = (pressed ? 0.5 : 0.0);
+        return true;
+    case Qt::Key_Up:
+        m_pitchSpeed = (pressed ? -0.5 : 0.0);
+        return true;
     case Qt::Key_S:
         m_walkingVelocity = (pressed ? -0.01 : 0.0);
         return true;
-    case Qt::Key_Up:
     case Qt::Key_W:
         m_walkingVelocity = (pressed ? 0.01 : 0.0);
         return true;
@@ -544,7 +553,7 @@ bool MazeScene::blocked(const QPointF &pos, Entity *me) const
     }
 
     if (me) {
-        QRectF cameraRect = rectFromPoint(m_cameraPos, 0.4);
+        QRectF cameraRect = rectFromPoint(m_camera.pos(), 0.4);
 
         if (cameraRect.intersects(rect))
             return true;
@@ -569,7 +578,7 @@ bool MazeScene::tryMove(QPointF &pos, const QPointF &delta, Entity *entity) cons
 void MazeScene::updateTransforms()
 {
     foreach (WallItem *item, m_walls) {
-        item->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+        item->updateTransform(m_camera, m_walkTime * 0.001);
         if (item->isVisible()) {
             // embed recursive scene
             if (QGraphicsProxyWidget *child = item->childItem()) {
@@ -591,11 +600,11 @@ void MazeScene::updateTransforms()
         }
     }
     foreach (Entity *entity, m_entities)
-        entity->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+        entity->updateTransform(m_camera, m_walkTime * 0.001);
 
 #ifdef USE_PHONON
     if (m_player) {
-        qreal distance = QLineF(m_cameraPos, m_playerPos).length();
+        qreal distance = QLineF(m_camera.pos(), m_playerPos).length();
         m_player->setVolume(qPow(2, -0.3 * distance));
     }
 #endif
@@ -609,19 +618,26 @@ void MazeScene::move()
     long elapsed = m_time.elapsed();
     bool walked = false;
     while (m_simulationTime <= elapsed) {
-        m_cameraAngle += m_turningVelocity;
+        m_camera.setYaw(m_camera.yaw() + m_turningSpeed);
+        m_camera.setPitch(qBound(qreal(-30), m_camera.pitch() + m_pitchSpeed, qreal(30)));
 
         bool walking = false;
         if (m_walkingVelocity != 0) {
-            QPointF walkingDelta = QLineF::fromPolar(m_walkingVelocity, m_cameraAngle - 90).p2();
-            if (tryMove(m_cameraPos, walkingDelta))
+            QPointF walkingDelta = QLineF::fromPolar(m_walkingVelocity, m_camera.yaw() - 90).p2();
+            QPointF pos = m_camera.pos();
+            if (tryMove(pos, walkingDelta)) {
                 walking = true;
+                m_camera.setPos(pos);
+            }
         }
 
         if (m_strafingVelocity != 0) {
-            QPointF walkingDelta = QLineF::fromPolar(m_strafingVelocity, m_cameraAngle).p2();
-            if (tryMove(m_cameraPos, walkingDelta))
+            QPointF walkingDelta = QLineF::fromPolar(m_strafingVelocity, m_camera.yaw()).p2();
+            QPointF pos = m_camera.pos();
+            if (tryMove(pos, walkingDelta)) {
                 walking = true;
+                m_camera.setPos(pos);
+            }
         }
 
         walked = walked || walking;
@@ -636,11 +652,11 @@ void MazeScene::move()
         }
     }
 
-    if (walked || m_turningVelocity != 0) {
+    if (walked || m_turningSpeed != 0 || m_pitchSpeed != 0) {
         updateTransforms();
     } else {
         foreach (Entity *entity, movedEntities)
-            entity->updateTransform(m_cameraPos, m_cameraAngle, m_walkTime * 0.001);
+            entity->updateTransform(m_camera, m_walkTime * 0.001);
     }
 }
 
@@ -752,9 +768,9 @@ static inline int mod(int x, int y)
     return ((x % y) + y) % y;
 }
 
-void Entity::updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time)
+void Entity::updateTransform(const Camera &camera, qreal time)
 {
-    qreal angleToCamera = QLineF(m_pos, cameraPos).angle();
+    qreal angleToCamera = QLineF(m_pos, camera.pos()).angle();
     int cameraAngleIndex = mod(qRound(angleToCamera + 22.5), 360) / 45;
 
     m_angleIndex = mod(qRound(cameraAngleIndex * 45 - m_angle + 22.5), 360) / 45;
@@ -763,7 +779,7 @@ void Entity::updateTransform(const QPointF &cameraPos, qreal cameraRotation, qre
     setPosition(m_pos - delta, m_pos + delta);
 
     updateImage();
-    ProjectedItem::updateTransform(cameraPos, cameraRotation, time);
+    ProjectedItem::updateTransform(camera, time);
 }
 
 bool Entity::move(MazeScene *scene)
@@ -916,7 +932,7 @@ ScriptWidget::ScriptWidget(MazeScene *scene, Entity *entity)
 
 void ScriptWidget::timerEvent(QTimerEvent *)
 {
-    QPointF player = m_scene->cameraPosition();
+    QPointF player = m_scene->camera().pos();
     QPointF entity = m_entity->pos();
 
     QScriptValue px(m_engine, player.x());

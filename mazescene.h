@@ -21,6 +21,29 @@ public:
     void resizeEvent(QResizeEvent *event);
 };
 
+class Camera
+{
+public:
+    Camera()
+        : m_yaw(0)
+        , m_pitch(0)
+    {
+    }
+
+    qreal yaw() const { return m_yaw; }
+    qreal pitch() const { return m_pitch; }
+    QPointF pos() const { return m_pos; }
+
+    void setYaw(qreal yaw) { m_yaw = yaw; }
+    void setPitch(qreal pitch) { m_pitch = pitch; }
+    void setPos(const QPointF &pos) { m_pos = pos; }
+
+private:
+    qreal m_yaw;
+    qreal m_pitch;
+    QPointF m_pos;
+};
+
 class Light
 {
 public:
@@ -48,7 +71,7 @@ public:
     QRectF boundingRect() const;
 
     void setPosition(const QPointF &a, const QPointF &b);
-    void updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time);
+    void updateTransform(const Camera &camera, qreal time);
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
     void setAnimationTime(qreal time);
     void setImage(const QImage &image);
@@ -92,7 +115,7 @@ class Entity : public QObject, public ProjectedItem
     Q_OBJECT
 public:
     Entity(const QPointF &pos);
-    void updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time);
+    void updateTransform(const Camera &camera, qreal time);
 
     QPointF pos() const { return m_pos; }
 
@@ -138,7 +161,7 @@ public:
 
     bool tryMove(QPointF &pos, const QPointF &delta, Entity *entity = 0) const;
 
-    QPointF cameraPosition() { return m_cameraPos; }
+    Camera camera() const { return m_camera; }
 
 protected:
     void keyPressEvent(QKeyEvent *event);
@@ -166,11 +189,12 @@ private:
     QVector<Entity *> m_entities;
     QVector<Light> m_lights;
 
-    QPointF m_cameraPos;
-    qreal m_cameraAngle;
+    Camera m_camera;
+
     qreal m_walkingVelocity;
     qreal m_strafingVelocity;
-    qreal m_turningVelocity;
+    qreal m_turningSpeed;
+    qreal m_pitchSpeed;
 
     QTime m_time;
     QTimeLine *m_doorAnimation;
