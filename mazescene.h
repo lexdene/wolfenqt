@@ -21,6 +21,22 @@ public:
     void resizeEvent(QResizeEvent *event);
 };
 
+class Light
+{
+public:
+    Light() {}
+    Light(const QPointF &pos, qreal intensity);
+
+    qreal intensityAt(const QPointF &pos) const;
+
+    QPointF pos() const { return m_pos; }
+    qreal intensity() const { return m_intensity; }
+
+private:
+    QPointF m_pos;
+    qreal m_intensity;
+};
+
 class ProjectedItem : public QGraphicsItem
 {
 public:
@@ -33,10 +49,11 @@ public:
 
     void setPosition(const QPointF &a, const QPointF &b);
     void updateTransform(const QPointF &cameraPos, qreal cameraRotation, qreal time);
-    void setDepths(qreal za, qreal zb);
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
     void setAnimationTime(qreal time);
     void setImage(const QImage &image);
+    void updateLighting(const QVector<Light> &lights);
+    void setConstantLight(qreal value);
 
 private:
     QPointF m_a;
@@ -57,11 +74,17 @@ public:
         return m_childItem;
     }
 
+    qreal childScale() const
+    {
+        return m_scale;
+    }
+
     int type() const { return m_type; }
 
 private:
     QGraphicsProxyWidget *m_childItem;
     int m_type;
+    qreal m_scale;
 };
 
 class Entity : public QObject, public ProjectedItem
@@ -107,7 +130,7 @@ class MazeScene : public QGraphicsScene
 {
     Q_OBJECT
 public:
-    MazeScene(const char *map, int width, int height);
+    MazeScene(const QVector<Light> &lights, const char *map, int width, int height);
 
     void addEntity(Entity *entity);
     void addWall(const QPointF &a, const QPointF &b, int type);
@@ -141,6 +164,7 @@ private:
     QVector<QGraphicsItem *> m_floorTiles;
     QVector<QPushButton *> m_buttons;
     QVector<Entity *> m_entities;
+    QVector<Light> m_lights;
 
     QPointF m_cameraPos;
     qreal m_cameraAngle;

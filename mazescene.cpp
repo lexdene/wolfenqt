@@ -33,8 +33,25 @@ void View::resizeEvent(QResizeEvent *)
     scale(factor, factor);
 }
 
-MazeScene::MazeScene(const char *map, int width, int height)
-    : m_cameraPos(1.5, 1.5)
+Light::Light(const QPointF &pos, qreal intensity)
+    : m_pos(pos)
+    , m_intensity(intensity)
+{
+}
+
+qreal Light::intensityAt(const QPointF &pos) const
+{
+    const qreal quadraticIntensity = 150 * m_intensity;
+    const qreal linearIntensity = 30 * m_intensity;
+
+    const qreal d = QLineF(m_pos, pos).length();
+    return quadraticIntensity / (d * d)
+        + linearIntensity / d;
+}
+
+MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, int height)
+    : m_lights(lights)
+    , m_cameraPos(1.5, 1.5)
     , m_cameraAngle(0.1)
     , m_walkingVelocity(0)
     , m_strafingVelocity(0)
@@ -86,6 +103,12 @@ MazeScene::MazeScene(const char *map, int width, int height)
         }
     }
 
+    foreach (WallItem *item, m_walls) {
+        if (item->type() == 2)
+            item->setConstantLight(0.4);
+        else
+            item->updateLighting(m_lights);
+    }
 
     QTimer *timer = new QTimer(this);
     timer->setInterval(20);
@@ -99,10 +122,12 @@ MazeScene::MazeScene(const char *map, int width, int height)
 void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
 {
     WallItem *item = new WallItem(this, a, b, type);
+#ifdef USE_PHONON
     if (item->type() == 7) {
         m_playerPos = (a + b ) / 2;
         m_player = static_cast<MediaPlayer *>(item->childItem()->widget());
     }
+#endif
     item->setVisible(false);
     addItem(item);
     m_walls << item;
@@ -224,7 +249,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         "http://labs.trolltech.com/blogs/"
     };
 
-    qreal scale = 0.8;
+    m_scale = 0.8;
 
     QPalette palette;
     palette.setColor(QPalette::Window, QColor(Qt::transparent));
@@ -239,7 +264,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         widget->layout()->addWidget(button);
         widget->setPalette(palette);
         childWidget = widget;
-        scale = 0.3;
+        m_scale = 0.3;
     } else if (type == 4) {
         View *view = new View;
         view->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
@@ -254,7 +279,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
 #ifdef USE_PHONON
         Q_INIT_RESOURCE(mediaplayer);
         childWidget = new MediaPlayer(QString());
-        scale = 0.6;
+        m_scale = 0.6;
 #endif
     } else if (type == 0 || type == 2) {
         static int index;
@@ -267,7 +292,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
             widget->layout()->addWidget(checkBox);
             widget->setPalette(palette);
             childWidget = widget;
-            scale = 0.2;
+            m_scale = 0.2;
         } else if (!(index % 7)) {
             static int webIndex = 0;
             const char *url = urls[webIndex++ % (sizeof(urls)/sizeof(char*))];
@@ -293,7 +318,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     QRectF rect = m_childItem->boundingRect();
     QPointF center = rect.center();
 
-    scale = qMin(scale / rect.width(), scale / rect.height());
+    qreal scale = qMin(m_scale / rect.width(), m_scale / rect.height());
     m_childItem->translate(0, -0.05);
     m_childItem->scale(scale, scale);
     m_childItem->translate(-center.x(), -center.y());
@@ -312,12 +337,10 @@ bool MazeScene::eventFilter(QObject *target, QEvent *event)
         if (proxy->widget() == widget) {
             QRectF rect = proxy->boundingRect();
 
-            if (QRectF(-0.5, -0.5, 1, 1).contains(proxy->mapToParent(rect).boundingRect()))
-                continue;
-
             QPointF center = rect.center();
 
-            qreal scale = qMin(0.8 / rect.width(), 0.8 / rect.height());
+            qreal scale = item->childScale();
+            scale = qMin(scale / rect.width(), scale / rect.height());
             proxy->resetMatrix();
             proxy->translate(0, -0.05);
             proxy->scale(scale, scale);
@@ -333,37 +356,36 @@ bool MazeScene::eventFilter(QObject *target, QEvent *event)
     return false;
 }
 
-void ProjectedItem::setDepths(qreal za, qreal zb)
+void ProjectedItem::setConstantLight(qreal light)
+{
+    if (m_shadowItem)
+        m_shadowItem->setBrush(QColor(0, 0, 0, int(light * 255)));
+}
+
+void ProjectedItem::updateLighting(const QVector<Light> &lights)
 {
     if (!m_shadowItem)
         return;
 
-    const qreal falloff = 40;
-    const int maxAlpha = 180;
-    int va = int(falloff * zb);
-    int vb = int(falloff * za);
+    const qreal constantIntensity = 80;
+    qreal la = constantIntensity;
+    qreal lb = constantIntensity;
+    foreach (const Light &light, lights) {
+        la += light.intensityAt(m_b);
+        lb += light.intensityAt(m_a);
+    }
 
-    if (va == vb || va >= maxAlpha && vb >= maxAlpha) {
-        m_shadowItem->setBrush(QColor(0, 0, 0, qMin(maxAlpha, va)));
+    int va = qMax(0, 255 - int(la));
+    int vb = qMax(0, 255 - int(lb));
+
+    if (va == vb) {
+        m_shadowItem->setBrush(QColor(0, 0, 0, va));
     } else {
-        qreal xa = 0;
-        qreal xb = 1;
-
-        if (va >= maxAlpha) {
-            xa = 1 - (maxAlpha - vb) / (va - vb);
-            va = maxAlpha;
-        }
-
-        if (vb >= maxAlpha) {
-            xb = (maxAlpha - va) / (vb - va);
-            vb = maxAlpha;
-        }
-
         const QRectF rect = boundingRect();
         QLinearGradient g(rect.topLeft(), rect.topRight());
 
-        g.setColorAt(xa, QColor(0, 0, 0, va));
-        g.setColorAt(xb, QColor(0, 0, 0, vb));
+        g.setColorAt(0, QColor(0, 0, 0, va));
+        g.setColorAt(1, QColor(0, 0, 0, vb));
 
         m_shadowItem->setBrush(g);
     }
@@ -419,16 +441,11 @@ void ProjectedItem::updateTransform(const QPointF &cameraPos, qreal cameraAngle,
     const qreal fov = 0.5;
 
     const QTransform project(mx, 0, mz * fov, 0, 1, 0, tx, 0.04 * qSin(10 * time) + 0.1, tz * fov);
-
-    const qreal za = QLineF(QPointF(), ca).length();
-    const qreal zb = QLineF(QPointF(), cb).length();
     const qreal zm = QLineF(QPointF(), (ca + cb) / 2).length();
 
     setVisible(true);
     setZValue(-zm);
     setTransform(project);
-
-    setDepths(za, zb);
 }
 
 void MazeScene::keyPressEvent(QKeyEvent *event)
@@ -555,7 +572,10 @@ void MazeScene::updateTransforms()
                         "# @ #"
                         "#   #"
                         "#####";
-                    MazeScene *embeddedScene = new MazeScene(map, 5, 5);
+                    QVector<Light> lights;
+                    lights << Light(QPointF(2.5, 2.5), 1)
+                           << Light(QPointF(1.5, 1.5), 0.4);
+                    MazeScene *embeddedScene = new MazeScene(lights, map, 5, 5);
                     view->setScene(embeddedScene);
                 }
             }
@@ -567,7 +587,7 @@ void MazeScene::updateTransforms()
 #ifdef USE_PHONON
     if (m_player) {
         qreal distance = QLineF(m_cameraPos, m_playerPos).length();
-        m_player->setVolume(qPow(2, -0.6 * distance));
+        m_player->setVolume(qPow(2, -0.3 * distance));
     }
 #endif
     setFocusItem(0); // setVisible(true) might give focus to one of the items
@@ -885,7 +905,7 @@ ScriptWidget::ScriptWidget(MazeScene *scene, Entity *entity)
     m_time.start();
 }
 
-void ScriptWidget::timerEvent(QTimerEvent *event)
+void ScriptWidget::timerEvent(QTimerEvent *)
 {
     QPointF player = m_scene->cameraPosition();
     QPointF entity = m_entity->pos();

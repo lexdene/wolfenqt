@@ -21,7 +21,12 @@ int main(int argc, char **argv)
         "$      !"
         "#&&&&&&#";
 
-    MazeScene *scene = new MazeScene(map, 8, 12);
+    QVector<Light> lights;
+    lights << Light(QPointF(3.5, 2.5), 1)
+           << Light(QPointF(3.5, 6.5), 1)
+           << Light(QPointF(1.5, 10.5), 0.3);
+
+    MazeScene *scene = new MazeScene(lights, map, 8, 12);
 
     View view;
     view.setScene(scene);
