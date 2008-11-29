@@ -29,5 +29,5 @@ DEPLOYMENT_PLUGIN += phonon_ds9 phonon_waveout
 }
 
 # Input
-HEADERS += mazescene.h
-SOURCES += main.cpp mazescene.cpp
+HEADERS += mazescene.h matrix4x4.h
+SOURCES += main.cpp mazescene.cpp matrix4x4.cpp

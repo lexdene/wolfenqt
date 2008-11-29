@@ -14,6 +14,8 @@
 #include <qmath.h>
 #include <qdebug.h>
 
+#include "matrix4x4.h"
+
 #ifdef USE_PHONON
 #include "mediaplayer/mediaplayer.h"
 #endif
@@ -162,9 +164,6 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     painter->fillRect(QRectF(rect.topLeft(), QPointF(rect.right(), rect.center().y())), QColor(100, 120, 200));
     painter->fillRect(QRectF(QPointF(rect.left(), rect.center().y()), rect.bottomRight()), QColor(127, 190, 100));
 
-    QTransform rotation = rotatingTransform(m_cameraAngle);
-    rotation.translate(-m_cameraPos.x(), -m_cameraPos.y());
-
     static QImage floor = QImage("floor.png").convertToFormat(QImage::Format_RGB32);
     QBrush floorBrush(floor);
 
@@ -176,21 +175,29 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     floorBrush.setTransform(brushScale);
     ceilingBrush.setTransform(brushScale);
 
-    QTransform project;
-    const qreal fov = 0.5;
-    const qreal wallHeight = 0.5 + 0.04 * qSin(0.01 * m_walkTime) + 0.1;
-    const qreal ceilingHeight = -0.5 + 0.04 * qSin(0.01 * m_walkTime) + 0.1;
     const QRectF r(1, 1, m_width-2, m_height-2);
 
+    Matrix4x4 m;
+    m *= Matrix4x4::fromRotation(m_cameraAngle, Qt::YAxis);
+    m *= Matrix4x4::fromProjection(0.5);
+
+    qreal heightOffset = 0.04 * qSin(0.01 * m_walkTime) + 0.1;
+
+    Matrix4x4 floorMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
+    floorMatrix *= Matrix4x4::fromTranslation(-m_cameraPos.x(), heightOffset + 0.5, -m_cameraPos.y());
+    floorMatrix *= m;
+
     painter->save();
-    project = QTransform(rotation.m11(), 0, fov * rotation.m12(), rotation.m21(), 0, fov * rotation.m22(), rotation.m31(), wallHeight, fov * rotation.m32());
-    painter->setTransform(project, true);
+    painter->setTransform(floorMatrix.toQTransform(), true);
     painter->fillRect(r, floorBrush);
     painter->restore();
 
+    Matrix4x4 ceilingMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
+    ceilingMatrix *= Matrix4x4::fromTranslation(-m_cameraPos.x(), heightOffset - 0.5, -m_cameraPos.y());
+    ceilingMatrix *= m;
+
     painter->save();
-    project = QTransform(rotation.m11(), 0, fov * rotation.m12(), rotation.m21(), 0, fov * rotation.m22(), rotation.m31(), ceilingHeight, fov * rotation.m32());
-    painter->setTransform(project, true);
+    painter->setTransform(ceilingMatrix.toQTransform(), true);
     painter->fillRect(r, ceilingBrush);
     painter->restore();
 
@@ -423,29 +430,31 @@ void ProjectedItem::setImage(const QImage &image)
 
 void ProjectedItem::updateTransform(const QPointF &cameraPos, qreal cameraAngle, qreal time)
 {
-    QTransform rotation = rotatingTransform(cameraAngle);
-    rotation.translate(-cameraPos.x(), -cameraPos.y());
+    QTransform rotation;
+    rotation *= QTransform().translate(-cameraPos.x(), -cameraPos.y());
+    rotation *= rotatingTransform(cameraAngle);
 
     QPointF ca = rotation.map(m_a);
     QPointF cb = rotation.map(m_b);
+    qreal zm = QLineF(QPointF(), (ca + cb) / 2).length();
 
     if (ca.y() <= 0 && cb.y() <= 0) {
         setVisible(false);
         return;
     }
 
-    const qreal mx = ca.x() - cb.x();
-    const qreal tx = 0.5 * (ca.x() + cb.x());
-    const qreal mz = ca.y() - cb.y();
-    const qreal tz = 0.5 * (ca.y() + cb.y());
     const qreal fov = 0.5;
+    QPointF center = (m_a + m_b) / 2;
 
-    const QTransform project(mx, 0, mz * fov, 0, 1, 0, tx, 0.04 * qSin(10 * time) + 0.1, tz * fov);
-    const qreal zm = QLineF(QPointF(), (ca + cb) / 2).length();
+    Matrix4x4 m;
+    m *= Matrix4x4::fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis);
+    m *= Matrix4x4::fromTranslation(center.x() - cameraPos.x(), 0.04 * qSin(10 * time) + 0.1, center.y() - cameraPos.y());
+    m *= Matrix4x4::fromRotation(cameraAngle, Qt::YAxis);
+    m *= Matrix4x4::fromProjection(fov);
 
     setVisible(true);
     setZValue(-zm);
-    setTransform(project);
+    setTransform(m.toQTransform());
 }
 
 void MazeScene::keyPressEvent(QKeyEvent *event)
