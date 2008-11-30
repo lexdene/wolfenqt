@@ -157,15 +157,6 @@ static inline QTransform rotatingTransform(qreal angle)
 
 void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
 {
-    QLinearGradient g(QPointF(0, rect.top()), QPointF(0, rect.bottom()));
-
-    g.setColorAt(0, QColor(0, 0, 0, 50));
-    g.setColorAt(0.4, QColor(0, 0, 0, 100));
-    g.setColorAt(0.6, QColor(0, 0, 0, 100));
-    g.setColorAt(1, QColor(0, 0, 0, 50));
-    painter->fillRect(QRectF(rect.topLeft(), QPointF(rect.right(), rect.center().y())), QColor(100, 120, 200));
-    painter->fillRect(QRectF(QPointF(rect.left(), rect.center().y()), rect.bottomRight()), QColor(127, 190, 100));
-
     static QImage floor = QImage("floor.png").convertToFormat(QImage::Format_RGB32);
     QBrush floorBrush(floor);
 
@@ -203,8 +194,6 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &rect)
     painter->setTransform(ceilingMatrix.toQTransform(), true);
     painter->fillRect(r, ceilingBrush);
     painter->restore();
-
-    painter->fillRect(rect, g);
 }
 
 ProjectedItem::ProjectedItem(const QRectF &bounds, bool shadow)
