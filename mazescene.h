@@ -1,3 +1,6 @@
+#ifndef MAZESCENE_H
+#define MAZESCENE_H
+
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
@@ -8,10 +11,9 @@
 #include <QTime>
 #include <QTimeLine>
 
-#include <QScriptEngine>
-
 class MazeScene;
 class MediaPlayer;
+class Entity;
 
 class View : public QGraphicsView
 {
@@ -110,45 +112,6 @@ private:
     qreal m_scale;
 };
 
-class Entity : public QObject, public ProjectedItem
-{
-    Q_OBJECT
-public:
-    Entity(const QPointF &pos);
-    void updateTransform(const Camera &camera, qreal time);
-
-    QPointF pos() const { return m_pos; }
-
-    bool move(MazeScene *scene);
-
-public slots:
-    void turnTowards(qreal x, qreal y);
-    void turnLeft();
-    void turnRight();
-    void walk();
-    void stop();
-
-protected:
-    void timerEvent(QTimerEvent *event);
-
-private:
-    void updateImage();
-
-private:
-    QPointF m_pos;
-    qreal m_angle;
-    bool m_walking;
-    bool m_walked;
-
-    qreal m_turnVelocity;
-    QPointF m_turnTarget;
-
-    bool m_useTurnTarget;
-
-    int m_animationIndex;
-    int m_angleIndex;
-};
-
 class MazeScene : public QGraphicsScene
 {
     Q_OBJECT
@@ -206,28 +169,4 @@ private:
     QPointF m_playerPos;
 };
 
-class ScriptWidget : public QWidget
-{
-    Q_OBJECT
-public:
-    ScriptWidget(MazeScene *scene, Entity *entity);
-
-public slots:
-    void display(QScriptValue value);
-
-private slots:
-    void updateSource();
-    void setPreset(int preset);
-
-protected:
-    void timerEvent(QTimerEvent *event);
-
-private:
-    MazeScene *m_scene;
-    Entity *m_entity;
-    QScriptEngine *m_engine;
-    QPlainTextEdit *m_sourceEdit;
-    QLineEdit *m_statusView;
-    QString m_source;
-    QTime m_time;
-};
+#endif
