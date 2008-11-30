@@ -11,6 +11,8 @@
 #include <QTime>
 #include <QTimeLine>
 
+#include "matrix4x4.h"
+
 class MazeScene;
 class MediaPlayer;
 class Entity;
@@ -39,6 +41,8 @@ public:
     void setYaw(qreal yaw) { m_yaw = yaw; }
     void setPitch(qreal pitch) { m_pitch = pitch; }
     void setPos(const QPointF &pos) { m_pos = pos; }
+
+    Matrix4x4 matrix(qreal time) const;
 
 private:
     qreal m_yaw;
@@ -70,10 +74,11 @@ public:
     QPointF a() const { return m_a; }
     QPointF b() const { return m_b; }
 
+    virtual void updateTransform(const Camera &camera, qreal time);
+
     QRectF boundingRect() const;
 
     void setPosition(const QPointF &a, const QPointF &b);
-    void updateTransform(const Camera &camera, qreal time);
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
     void setAnimationTime(qreal time);
     void setImage(const QImage &image);
@@ -99,12 +104,9 @@ public:
         return m_childItem;
     }
 
-    qreal childScale() const
-    {
-        return m_scale;
-    }
-
     int type() const { return m_type; }
+
+    void childResized();
 
 private:
     QGraphicsProxyWidget *m_childItem;
@@ -118,6 +120,7 @@ class MazeScene : public QGraphicsScene
 public:
     MazeScene(const QVector<Light> &lights, const char *map, int width, int height);
 
+    void addProjectedItem(ProjectedItem *item);
     void addEntity(Entity *entity);
     void addWall(const QPointF &a, const QPointF &b, int type);
     void drawBackground(QPainter *painter, const QRectF &rect);
@@ -151,6 +154,7 @@ private:
     QVector<QPushButton *> m_buttons;
     QVector<Entity *> m_entities;
     QVector<Light> m_lights;
+    QVector<ProjectedItem *> m_projectedItems;
 
     Camera m_camera;
 

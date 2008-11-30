@@ -135,9 +135,3 @@ void Entity::updateImage()
     else
         setImage(images.at(m_angleIndex));
 }
-
-void MazeScene::addEntity(Entity *entity)
-{
-    addItem(entity);
-    m_entities << entity;
-}

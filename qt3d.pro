@@ -7,6 +7,8 @@ TARGET =
 DEPENDPATH += .
 INCLUDEPATH += .
 
+QMAKE_CXXFLAGS += -g
+
 QT += webkit opengl script
 
 contains(QT_CONFIG, phonon):{
@@ -31,3 +33,7 @@ DEPLOYMENT_PLUGIN += phonon_ds9 phonon_waveout
 # Input
 HEADERS += entity.h mazescene.h matrix4x4.h scriptwidget.h
 SOURCES += main.cpp entity.cpp mazescene.cpp matrix4x4.cpp scriptwidget.cpp
+
+# From modelviewer
+HEADERS += modelitem.h point3d.h model.h
+SOURCES += model.cpp modelitem.cpp

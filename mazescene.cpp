@@ -14,9 +14,9 @@
 #include <qmath.h>
 #include <qdebug.h>
 
-#include "matrix4x4.h"
 #include "scriptwidget.h"
 #include "entity.h"
+#include "modelitem.h"
 
 #ifdef USE_PHONON
 #include "mediaplayer/mediaplayer.h"
@@ -83,6 +83,7 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
     types['?'] = 5;
     types['!'] = 6;
     types['='] = 7;
+    types['*'] = 8;
 
     int type;
     for (int y = 0; y < height; ++y) {
@@ -125,6 +126,12 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
     updateTransforms();
 }
 
+void MazeScene::addProjectedItem(ProjectedItem *item)
+{
+    addItem(item);
+    m_projectedItems << item;
+}
+
 void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
 {
     WallItem *item = new WallItem(this, a, b, type);
@@ -135,7 +142,7 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
     }
 #endif
     item->setVisible(false);
-    addItem(item);
+    addProjectedItem(item);
     m_walls << item;
 
     if (type == -1)
@@ -157,6 +164,16 @@ static inline QTransform rotatingTransform(qreal angle)
     return transform;
 }
 
+Matrix4x4 Camera::matrix(qreal time) const
+{
+    Matrix4x4 m;
+    m *= Matrix4x4::fromTranslation(-m_pos.x(), 0.04 * qSin(10 * time) + 0.1, -m_pos.y());
+    m *= Matrix4x4::fromRotation(m_yaw + 180, Qt::YAxis);
+    m *= Matrix4x4::fromScale(-1, 1, 1);
+    m *= Matrix4x4::fromRotation(m_pitch, Qt::XAxis);
+    return m;
+}
+
 void MazeScene::drawBackground(QPainter *painter, const QRectF &)
 {
     static QImage floor = QImage("floor.png").convertToFormat(QImage::Format_RGB32);
@@ -172,15 +189,10 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &)
 
     const QRectF r(1, 1, m_width-2, m_height-2);
 
-    Matrix4x4 m;
-    m *= Matrix4x4::fromRotation(m_camera.yaw(), Qt::YAxis);
-    m *= Matrix4x4::fromRotation(m_camera.pitch(), Qt::XAxis);
-    m *= Matrix4x4::fromProjection(0.5);
-
-    qreal heightOffset = 0.04 * qSin(0.01 * m_walkTime) + 0.1;
+    Matrix4x4 m = m_camera.matrix(0.001 * m_walkTime) * Matrix4x4::fromProjection(1);
 
     Matrix4x4 floorMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
-    floorMatrix *= Matrix4x4::fromTranslation(-m_camera.pos().x(), heightOffset + 0.5, -m_camera.pos().y());
+    floorMatrix *= Matrix4x4::fromTranslation(0, 0.5, 0);
     floorMatrix *= m;
 
     painter->save();
@@ -189,13 +201,19 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &)
     painter->restore();
 
     Matrix4x4 ceilingMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
-    ceilingMatrix *= Matrix4x4::fromTranslation(-m_camera.pos().x(), heightOffset - 0.5, -m_camera.pos().y());
+    ceilingMatrix *= Matrix4x4::fromTranslation(0, -0.5, 0);
     ceilingMatrix *= m;
 
     painter->save();
     painter->setTransform(ceilingMatrix.toQTransform(), true);
     painter->fillRect(r, ceilingBrush);
     painter->restore();
+}
+
+void MazeScene::addEntity(Entity *entity)
+{
+    addProjectedItem(entity);
+    m_entities << entity;
 }
 
 ProjectedItem::ProjectedItem(const QRectF &bounds, bool shadow)
@@ -216,6 +234,16 @@ void ProjectedItem::setPosition(const QPointF &a, const QPointF &b)
     m_a = a;
     m_b = b;
 }
+
+class ResizingView : public QGraphicsView
+{
+protected:
+    void resizeEvent(QResizeEvent *event) {
+        if (scene())
+            scene()->setSceneRect(QRect(QPoint(0, 0), event->size()));
+        QGraphicsView::resizeEvent(event);
+    }
+};
 
 WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int type)
     : ProjectedItem(QRectF(-0.5, -0.5, 1.0, 1.0))
@@ -252,9 +280,6 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
 
     m_scale = 0.8;
 
-    QPalette palette;
-    palette.setColor(QPalette::Window, QColor(Qt::transparent));
-
     m_childItem = 0;
     QWidget *childWidget = 0;
     if (type == 3 && a.y() == b.y()) {
@@ -263,7 +288,6 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         QObject::connect(button, SIGNAL(clicked()), scene, SLOT(toggleDoors()));
         widget->setLayout(new QVBoxLayout);
         widget->layout()->addWidget(button);
-        widget->setPalette(palette);
         childWidget = widget;
         m_scale = 0.3;
     } else if (type == 4) {
@@ -282,6 +306,11 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         childWidget = new MediaPlayer(QString());
         m_scale = 0.6;
 #endif
+    } else if (type == 8) {
+        ModelItem *dialog = new ModelItem;
+        childWidget = dialog;
+        scene->addProjectedItem(dialog);
+        m_scale = 0.5;
     } else if (type == 0 || type == 2) {
         static int index;
         if (index == 0) {
@@ -291,7 +320,6 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
             QObject::connect(checkBox, SIGNAL(toggled(bool)), scene, SLOT(toggleRenderer()), Qt::QueuedConnection);
             widget->setLayout(new QVBoxLayout);
             widget->layout()->addWidget(checkBox);
-            widget->setPalette(palette);
             childWidget = widget;
             m_scale = 0.2;
         } else if (!(index % 7)) {
@@ -333,28 +361,28 @@ bool MazeScene::eventFilter(QObject *target, QEvent *event)
 
     foreach (WallItem *item, m_walls) {
         QGraphicsProxyWidget *proxy = item->childItem();
-        if (!proxy)
-            continue;
-        if (proxy->widget() == widget) {
-            QRectF rect = proxy->boundingRect();
-
-            QPointF center = rect.center();
-
-            qreal scale = item->childScale();
-            scale = qMin(scale / rect.width(), scale / rect.height());
-            proxy->resetMatrix();
-            proxy->translate(0, -0.05);
-            proxy->scale(scale, scale);
-            proxy->translate(-center.x(), -center.y());
-
-            // refresh cache size
-            proxy->setCacheMode(QGraphicsItem::NoCache);
-            proxy->setCacheMode(QGraphicsItem::ItemCoordinateCache);
-            break;
-        }
+        if (proxy && proxy->widget() == widget)
+            item->childResized();
     }
 
     return false;
+}
+
+void WallItem::childResized()
+{
+    QRectF rect = m_childItem->boundingRect();
+
+    QPointF center = rect.center();
+
+    qreal scale = qMin(m_scale / rect.width(), m_scale / rect.height());
+    m_childItem->resetMatrix();
+    m_childItem->translate(0, -0.05);
+    m_childItem->scale(scale, scale);
+    m_childItem->translate(-center.x(), -center.y());
+
+    // refresh cache size
+    m_childItem->setCacheMode(QGraphicsItem::NoCache);
+    m_childItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
 }
 
 void ProjectedItem::setConstantLight(qreal light)
@@ -434,18 +462,19 @@ void ProjectedItem::updateTransform(const Camera &camera, qreal time)
     QPointF cb = rotation.map(m_b);
 
     if (ca.y() <= 0 && cb.y() <= 0) {
-        setVisible(false);
+        // hide the item by placing it far outside the scene
+        // we could use setVisible() but that causes unnecessary
+        // update to cahced items
+        QTransform transform;
+        transform.translate(-1000, -1000);
+        setTransform(transform);
         return;
     }
 
-    const qreal fov = 0.5;
-
     Matrix4x4 m;
     m *= Matrix4x4::fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis);
-    m *= Matrix4x4::fromTranslation(center.x() - camera.pos().x(), 0.04 * qSin(10 * time) + 0.1, center.y() - camera.pos().y());
-    m *= Matrix4x4::fromRotation(camera.yaw(), Qt::YAxis);
-    m *= Matrix4x4::fromRotation(camera.pitch(), Qt::XAxis);
-    m *= Matrix4x4::fromProjection(fov);
+    m *= Matrix4x4::fromTranslation(center.x(), 0, center.y());
+    m *= camera.matrix(time) * Matrix4x4::fromProjection(1);
 
     qreal zm = QLineF(camera.pos(), center).length();
 
@@ -569,8 +598,10 @@ bool MazeScene::tryMove(QPointF &pos, const QPointF &delta, Entity *entity) cons
 
 void MazeScene::updateTransforms()
 {
-    foreach (WallItem *item, m_walls) {
+    foreach (ProjectedItem *item, m_projectedItems)
         item->updateTransform(m_camera, m_walkTime * 0.001);
+
+    foreach (WallItem *item, m_walls) {
         if (item->isVisible()) {
             // embed recursive scene
             if (QGraphicsProxyWidget *child = item->childItem()) {
@@ -591,8 +622,6 @@ void MazeScene::updateTransforms()
             }
         }
     }
-    foreach (Entity *entity, m_entities)
-        entity->updateTransform(m_camera, m_walkTime * 0.001);
 
 #ifdef USE_PHONON
     if (m_player) {

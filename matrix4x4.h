@@ -4,27 +4,34 @@
 #include <qnamespace.h>
 #include <QTransform>
 
+#include "point3d.h"
+
 class Matrix4x4
 {
 public:
     Matrix4x4();
-    Matrix4x4(qreal *data);
+    Matrix4x4(float *data);
 
     Matrix4x4 &operator*=(const Matrix4x4 &other);
     Matrix4x4 operator*(const Matrix4x4 &other) const;
 
-    static Matrix4x4 fromRotation(qreal angle, Qt::Axis axis);
-    static Matrix4x4 fromTranslation(qreal dx, qreal dy, qreal dz);
-    static Matrix4x4 fromScale(qreal sx, qreal sy, qreal sz);
-    static Matrix4x4 fromProjection(qreal fov);
-    static Matrix4x4 convert2dTo3d();
+    Point3d operator*(const Point3d &point) const;
+
+    static Matrix4x4 fromRotation(float angle, Qt::Axis axis);
+    static Matrix4x4 fromTranslation(float dx, float dy, float dz);
+    static Matrix4x4 fromScale(float sx, float sy, float sz);
+    static Matrix4x4 fromProjection(float fov);
 
     QTransform toQTransform() const;
+    static Matrix4x4 fromQTransform(const QTransform &transform);
 
-    void setData(qreal *data);
+    void setData(float *data);
+    const float *data() const { return m; }
+
+    Matrix4x4 orderSwapped() const;
 
 private:
-    qreal m[16];
+    float m[16];
 };
 
 #endif
