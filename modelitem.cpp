@@ -50,7 +50,7 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
     if (!m_model)
         return;
 
-    Matrix4x4 projectionMatrix = Matrix4x4::fromProjection(1);
+    Matrix4x4 projectionMatrix = Matrix4x4::fromProjection(70);
     projectionMatrix *= Matrix4x4::fromQTransform(painter->transform());
 
     Matrix4x4 modelMatrix;

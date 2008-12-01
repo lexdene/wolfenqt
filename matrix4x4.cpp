@@ -1,5 +1,7 @@
 #include "matrix4x4.h"
 
+#include "qmath.h"
+
 Matrix4x4::Matrix4x4()
 {
     float identity[] =
@@ -128,8 +130,10 @@ Matrix4x4 Matrix4x4::fromScale(float sx, float sy, float sz)
     return Matrix4x4(data);
 }
 
-Matrix4x4 Matrix4x4::fromProjection(float fov)
+Matrix4x4 Matrix4x4::fromProjection(float fovAngle)
 {
+    float fov = qCos(fovAngle / 2) / qSin(fovAngle / 2);
+
     float zNear = 0.001;
     float zFar = 1000;
 

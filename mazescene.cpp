@@ -189,7 +189,7 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &)
 
     const QRectF r(1, 1, m_width-2, m_height-2);
 
-    Matrix4x4 m = m_camera.matrix(0.001 * m_walkTime) * Matrix4x4::fromProjection(1);
+    Matrix4x4 m = m_camera.matrix(0.001 * m_walkTime) * Matrix4x4::fromProjection(70);
 
     Matrix4x4 floorMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
     floorMatrix *= Matrix4x4::fromTranslation(0, 0.5, 0);
@@ -474,7 +474,7 @@ void ProjectedItem::updateTransform(const Camera &camera, qreal time)
     Matrix4x4 m;
     m *= Matrix4x4::fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis);
     m *= Matrix4x4::fromTranslation(center.x(), 0, center.y());
-    m *= camera.matrix(time) * Matrix4x4::fromProjection(1);
+    m *= camera.matrix(time) * Matrix4x4::fromProjection(70);
 
     qreal zm = QLineF(camera.pos(), center).length();
 
