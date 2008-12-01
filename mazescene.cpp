@@ -164,6 +164,14 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
         m_player = static_cast<MediaPlayer *>(item->childItem()->widget());
     }
 #endif
+
+    QGraphicsProxyWidget *proxy = item->childItem();
+    QWebView *view = proxy ? qobject_cast<QWebView *>(proxy->widget()) : 0;
+    if (view) {
+        connect(view, SIGNAL(loadFinished(bool)), this, SLOT(loadFinished()));
+        proxy->setVisible(false);
+    }
+
     item->setVisible(false);
     addProjectedItem(item);
     m_walls << item;
@@ -177,6 +185,19 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
         QPushButton *button = qobject_cast<QPushButton *>(widget);
         if (button)
             m_buttons << button;
+    }
+}
+
+void MazeScene::loadFinished()
+{
+    QWidget *widget = qobject_cast<QWidget *>(sender());
+
+    if (widget) {
+        foreach (WallItem *item, m_walls) {
+            QGraphicsProxyWidget *proxy = item->childItem();
+            if (proxy && proxy->widget() == widget)
+                proxy->setVisible(true);
+        }
     }
 }
 

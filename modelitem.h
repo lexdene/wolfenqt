@@ -57,6 +57,7 @@ public slots:
     void loadModel();
     void loadModel(const QString &filePath);
     void modelLoaded();
+    void updateItem();
 
 private:
     void setModel(Model *model);

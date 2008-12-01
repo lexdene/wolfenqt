@@ -163,6 +163,7 @@ public slots:
     void move();
     void toggleRenderer();
     void toggleDoors();
+    void loadFinished();
 
 private slots:
     void moveDoors(qreal value);

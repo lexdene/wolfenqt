@@ -43,7 +43,17 @@ void ModelItem::updateTransform(const Camera &camera, qreal time)
 
 QRectF ModelItem::boundingRect() const
 {
+    if (!scene()->views().isEmpty()) {
+        QGraphicsView *view = scene()->views().at(0);
+        return view->mapToScene(view->rect()).boundingRect();
+    }
+
     return scene()->sceneRect();
+}
+
+void ModelItem::updateItem()
+{
+    ProjectedItem::update();
 }
 
 void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
@@ -68,7 +78,7 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
     modelMatrix *= Matrix4x4::fromRotation(m_rotation.y, Qt::YAxis);
     modelMatrix *= Matrix4x4::fromRotation(m_rotation.x, Qt::XAxis);
 
-    ProjectedItem::update();
+    QTimer::singleShot(10, this, SLOT(updateItem()));
 
     if (painter->paintEngine()->type() != QPaintEngine::OpenGL) {
         m_wireframe->setEnabled(false);
