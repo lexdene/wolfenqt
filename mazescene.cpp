@@ -272,6 +272,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     static const char *urls[] =
     {
         "http://www.google.com",
+        "http://www.wikipedia.com",
         "http://programming.reddit.com",
         "http://www.trolltech.com",
         "http://www.planetkde.org",
