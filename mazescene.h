@@ -62,7 +62,7 @@ public:
     QPointF pos() const { return m_pos; }
 
     void setYaw(qreal yaw) { m_yaw = yaw; }
-    void setPitch(qreal pitch) { m_pitch = pitch; }
+    void setPitch(qreal pitch);
     void setPos(const QPointF &pos) { m_pos = pos; }
 
     Matrix4x4 matrix(qreal time) const;
@@ -153,6 +153,7 @@ public:
     Camera camera() const { return m_camera; }
 
 protected:
+    void mouseMoveEvent(QGraphicsSceneMouseEvent *event);
     void keyPressEvent(QKeyEvent *event);
     void keyReleaseEvent(QKeyEvent *event);
     bool eventFilter(QObject *target, QEvent *event);
@@ -186,6 +187,9 @@ private:
     qreal m_strafingVelocity;
     qreal m_turningSpeed;
     qreal m_pitchSpeed;
+
+    qreal m_deltaYaw;
+    qreal m_deltaPitch;
 
     QTime m_time;
     QTimeLine *m_doorAnimation;

@@ -82,6 +82,8 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
     , m_strafingVelocity(0)
     , m_turningSpeed(0)
     , m_pitchSpeed(0)
+    , m_deltaYaw(0)
+    , m_deltaPitch(0)
     , m_simulationTime(0)
     , m_walkTime(0)
     , m_width(width)
@@ -206,6 +208,11 @@ static inline QTransform rotatingTransform(qreal angle)
     QTransform transform;
     transform.rotate(angle);
     return transform;
+}
+
+void Camera::setPitch(qreal pitch)
+{
+    m_pitch = qBound(qreal(-30), pitch, qreal(30));
 }
 
 Matrix4x4 Camera::matrix(qreal time) const
@@ -549,6 +556,21 @@ void ProjectedItem::updateTransform(const Camera &camera, qreal time)
     setTransform(m.toQTransform());
 }
 
+
+void MazeScene::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
+{
+    if (focusItem()) {
+        QGraphicsScene::mouseMoveEvent(event);
+        return;
+    }
+
+    if (event->buttons() & Qt::RightButton) {
+        QPointF delta(event->scenePos() - event->lastScenePos());
+        m_deltaYaw += delta.x() * 80;
+        m_deltaPitch -= delta.y() * 80;
+    }
+}
+
 void MazeScene::keyPressEvent(QKeyEvent *event)
 {
     if (handleKey(event->key(), true)) {
@@ -704,9 +726,21 @@ void MazeScene::move()
     QSet<Entity *> movedEntities;
     long elapsed = m_time.elapsed();
     bool walked = false;
-    while (m_simulationTime <= elapsed) {
-        m_camera.setYaw(m_camera.yaw() + m_turningSpeed);
-        m_camera.setPitch(qBound(qreal(-30), m_camera.pitch() + m_pitchSpeed, qreal(30)));
+
+    const int stepSize = 5;
+    int steps = (elapsed - m_simulationTime) / stepSize;
+
+    if (steps) {
+        m_deltaYaw /= steps;
+        m_deltaPitch /= steps;
+
+        m_deltaYaw += m_turningSpeed;
+        m_deltaPitch += m_pitchSpeed;
+    }
+
+    for (int i = 0; i < steps; ++i) {
+        m_camera.setYaw(m_camera.yaw() + m_deltaYaw);
+        m_camera.setPitch(m_camera.pitch() + m_deltaPitch);
 
         bool walking = false;
         if (m_walkingVelocity != 0) {
@@ -730,8 +764,8 @@ void MazeScene::move()
         walked = walked || walking;
 
         if (walking)
-            m_walkTime += 5;
-        m_simulationTime += 5;
+            m_walkTime += stepSize;
+        m_simulationTime += stepSize;
 
         foreach (Entity *entity, m_entities) {
             if (entity->move(this))
@@ -739,12 +773,18 @@ void MazeScene::move()
         }
     }
 
-    if (walked || m_turningSpeed != 0 || m_pitchSpeed != 0) {
+    if (walked || m_deltaYaw != 0 || m_deltaPitch != 0) {
         updateTransforms();
     } else {
         foreach (Entity *entity, movedEntities)
             entity->updateTransform(m_camera, m_walkTime * 0.001);
     }
+
+    if (steps) {
+        m_deltaYaw = 0;
+        m_deltaPitch = 0;
+    }
+
 }
 
 void MazeScene::toggleDoors()
