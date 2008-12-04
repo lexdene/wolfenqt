@@ -289,6 +289,27 @@ protected:
     }
 };
 
+class ProxyWidget : public QGraphicsProxyWidget
+{
+public:
+    ProxyWidget(QGraphicsItem *parent = 0)
+        : QGraphicsProxyWidget(parent)
+    {
+    }
+
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant & value)
+    {
+        // we want the position of proxy widgets to stay at (0, 0)
+        // so ignore the position changes from the native QWidget
+        if (change == ItemPositionChange)
+            return QPointF();
+        else
+            return QGraphicsProxyWidget::itemChange(change, value);
+    }
+};
+
+
 WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int type)
     : ProjectedItem(QRectF(-0.5, -0.5, 1.0, 1.0))
     , m_type(type)
@@ -385,7 +406,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
 
     childWidget->installEventFilter(scene);
 
-    m_childItem = new QGraphicsProxyWidget(this);
+    m_childItem = new ProxyWidget(this);
     m_childItem->setWidget(childWidget);
     m_childItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
 
