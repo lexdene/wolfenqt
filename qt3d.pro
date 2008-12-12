@@ -9,7 +9,9 @@ INCLUDEPATH += .
 
 QMAKE_CXXFLAGS += -g
 
-QT += webkit opengl script
+QT += webkit script
+
+contains(QT_CONFIG, opengl):QT += opengl
 
 contains(QT_CONFIG, phonon):{
 DEPENDPATH += mediaplayer

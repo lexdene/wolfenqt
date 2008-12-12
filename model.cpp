@@ -24,10 +24,13 @@
 #include "model.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QTextStream>
 #include <QVarLengthArray>
 
+#ifndef QT_NO_OPENGL
 #include <QtOpenGL>
+#endif
 
 Model::Model(const QString &filePath)
     : m_fileName(QFileInfo(filePath).fileName())
@@ -114,6 +117,10 @@ Point3d Model::size() const
 
 void Model::render(bool wireframe, bool normals) const
 {
+#ifdef QT_NO_OPENGL
+    Q_UNUSED(wireframe);
+    Q_UNUSED(normals);
+#else
     glEnable(GL_DEPTH_TEST);
     glEnableClientState(GL_VERTEX_ARRAY);
     glDepthFunc(GL_GEQUAL);
@@ -149,6 +156,7 @@ void Model::render(bool wireframe, bool normals) const
     }
     glDisableClientState(GL_VERTEX_ARRAY);
     glDisable(GL_DEPTH_TEST);
+#endif
 }
 
 void Model::render(QPainter *painter, const Matrix4x4 &matrix, bool normals) const

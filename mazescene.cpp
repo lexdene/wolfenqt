@@ -25,7 +25,6 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QGLWidget>
 #include <QGraphicsProxyWidget>
 #include <QPainter>
 #include <QPushButton>
@@ -45,11 +44,19 @@
 #include "mediaplayer/mediaplayer.h"
 #endif
 
+#ifndef QT_NO_OPENGL
+#include <QGLWidget>
+#endif
+
 View::View()
 {
     resize(1024, 768);
+#ifndef QT_NO_OPENGL
     setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
     setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+#else
+    setRenderHints(QPainter::Antialiasing);
+#endif
 }
 
 void View::resizeEvent(QResizeEvent *)
@@ -387,6 +394,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
     } else if (type == 0 || type == 2) {
         static int index;
         if (index == 0) {
+#ifndef QT_NO_OPENGL
             QWidget *widget = new QWidget;
             QCheckBox *checkBox = new QCheckBox("Use OpenGL", widget);
             checkBox->setChecked(true);
@@ -395,6 +403,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
             widget->layout()->addWidget(checkBox);
             childWidget = widget;
             m_scale = 0.2;
+#endif
         } else if (!(index % 7)) {
             static int webIndex = 0;
             const char *url = urls[webIndex++ % (sizeof(urls)/sizeof(char*))];
@@ -813,11 +822,16 @@ void MazeScene::moveDoors(qreal value)
 
 void MazeScene::toggleRenderer()
 {
+#ifndef QT_NO_OPENGL
     if (views().size() == 0)
         return;
     QGraphicsView *view = views().at(0);
-    if (view->viewport()->inherits("QGLWidget"))
+    if (view->viewport()->inherits("QGLWidget")) {
         view->setViewport(new QWidget);
-    else
+        view->setRenderHints(QPainter::Antialiasing);
+    } else {
         view->setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
+        view->setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+    }
+#endif
 }

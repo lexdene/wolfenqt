@@ -25,12 +25,14 @@
 #include "model.h"
 
 #include <QtGui>
-#include <QtOpenGL>
 
 #include "mazescene.h"
 
+#ifndef QT_NO_OPENGL
+#include <QtOpenGL>
 #ifndef GL_MULTISAMPLE
 #define GL_MULTISAMPLE  0x809D
+#endif
 #endif
 
 void ModelItem::updateTransform(const Camera &camera, qreal time)
@@ -80,7 +82,9 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
 
     QTimer::singleShot(10, this, SLOT(updateItem()));
 
+#ifndef QT_NO_OPENGL
     if (painter->paintEngine()->type() != QPaintEngine::OpenGL) {
+#endif
         m_wireframe->setEnabled(false);
         m_wireframe->setChecked(false);
         m_wireframeEnabled = false;
@@ -88,6 +92,7 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
         painter->setPen(m_modelColor);
         m_model->render(painter, modelMatrix * m_matrix * projectionMatrix, m_normalsEnabled);
         return;
+#ifndef QT_NO_OPENGL
     }
 
     m_wireframe->setEnabled(true);
@@ -122,6 +127,7 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
 
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
+#endif
 }
 
 
