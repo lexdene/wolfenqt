@@ -161,16 +161,29 @@ void Model::render(bool wireframe, bool normals) const
 
 void Model::render(QPainter *painter, const Matrix4x4 &matrix, bool normals) const
 {
-    QVector<QLineF> lines;
-    for (int i = 0; i < m_edgeIndices.size(); i += 2)
-        lines << QLineF((matrix * m_points.at(m_edgeIndices.at(i))).toQPoint(),
-                        (matrix * m_points.at(m_edgeIndices.at(i+1))).toQPoint());
+    m_mapped.resize(m_points.size());
+    for (int i = 0; i < m_points.size(); ++i)
+        m_mapped[i] = matrix * m_points.at(i);
 
-    if (normals) {
-        for (int i = 0; i < m_normals.size(); ++i)
-            lines << QLineF((matrix * m_points.at(i)).toQPoint(),
-                            (matrix * (m_points.at(i) + m_normals.at(i) * 0.02f)).toQPoint());
+    m_lines.clear();
+    for (int i = 0; i < m_edgeIndices.size(); i += 2) {
+        const Point3d a = m_mapped.at(m_edgeIndices.at(i));
+        const Point3d b = m_mapped.at(m_edgeIndices.at(i+1));
+
+        if (a.z > 0 && b.z > 0)
+            m_lines << QLineF(a.toQPoint(), b.toQPoint());
     }
 
-    painter->drawLines(lines);
+    if (normals) {
+        for (int i = 0; i < m_normals.size(); ++i) {
+            const Point3d a = m_mapped.at(i);
+            const Point3d b = matrix * (m_points.at(i) + m_normals.at(i) * 0.02f);
+
+            if (a.z > 0 && b.z > 0)
+                m_lines << QLineF(a.toQPoint(), b.toQPoint());
+        }
+    }
+
+    painter->setRenderHint(QPainter::Antialiasing, false);
+    painter->drawLines(m_lines);
 }

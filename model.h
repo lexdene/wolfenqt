@@ -56,6 +56,9 @@ private:
     QVector<int> m_edgeIndices;
     QVector<int> m_pointIndices;
     Point3d m_size;
+
+    mutable QVector<QLineF> m_lines;
+    mutable QVector<Point3d> m_mapped;
 };
 
 #endif
