@@ -48,21 +48,9 @@
 #include <QGLWidget>
 #endif
 
-View::View()
-{
-    resize(1024, 768);
-#ifndef QT_NO_OPENGL
-    setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
-    setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
-#else
-    setRenderHints(QPainter::Antialiasing);
-#endif
-}
-
 void View::resizeEvent(QResizeEvent *)
 {
     resetMatrix();
-
     qreal factor = width() / 4.0;
     scale(factor, factor);
 }
@@ -142,13 +130,6 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
         }
     }
 
-    foreach (WallItem *item, m_walls) {
-        if (item->type() == 2)
-            item->setConstantLight(0.4);
-        else
-            item->updateLighting(m_lights);
-    }
-
     QTimer *timer = new QTimer(this);
     timer->setInterval(20);
     timer->start();
@@ -156,6 +137,7 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
 
     m_time.start();
     updateTransforms();
+    updateRenderer();
 }
 
 void MazeScene::addProjectedItem(ProjectedItem *item)
@@ -168,7 +150,7 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
 {
     WallItem *item = new WallItem(this, a, b, type);
 #ifdef USE_PHONON
-    if (item->type() == 7) {
+    if (item->childItem() && item->type() == 7) {
         m_playerPos = (a + b ) / 2;
         m_player = static_cast<MediaPlayer *>(item->childItem()->widget());
     }
@@ -220,16 +202,61 @@ static inline QTransform rotatingTransform(qreal angle)
 void Camera::setPitch(qreal pitch)
 {
     m_pitch = qBound(qreal(-30), pitch, qreal(30));
+    m_matrixDirty = true;
 }
 
-Matrix4x4 Camera::matrix(qreal time) const
+void Camera::setYaw(qreal yaw)
 {
+    m_yaw = yaw;
+    m_matrixDirty = true;
+}
+
+void Camera::setPos(const QPointF &pos)
+{
+    m_pos = pos;
+    m_matrixDirty = true;
+}
+
+void Camera::setFov(qreal fov)
+{
+    m_fov = fov;
+    m_matrixDirty = true;
+}
+
+void Camera::setTime(qreal time)
+{
+    m_time = time;
+    m_matrixDirty = true;
+}
+
+
+const Matrix4x4 &Camera::viewMatrix() const
+{
+    updateMatrix();
+    return m_viewMatrix;
+}
+
+const Matrix4x4 &Camera::viewProjectionMatrix() const
+{
+    updateMatrix();
+    return m_viewProjectionMatrix;
+}
+
+void Camera::updateMatrix() const
+{
+    if (!m_matrixDirty)
+        return;
+
+    m_matrixDirty = false;
+
     Matrix4x4 m;
-    m *= Matrix4x4::fromTranslation(-m_pos.x(), 0.04 * qSin(10 * time) + 0.1, -m_pos.y());
+    m *= Matrix4x4::fromTranslation(-m_pos.x(), 0.04 * qSin(10 * m_time) + 0.1, -m_pos.y());
     m *= Matrix4x4::fromRotation(m_yaw + 180, Qt::YAxis);
     m *= Matrix4x4::fromScale(-1, 1, 1);
     m *= Matrix4x4::fromRotation(m_pitch, Qt::XAxis);
-    return m;
+    m_viewMatrix = m;
+    m *= Matrix4x4::fromProjection(m_fov);
+    m_viewProjectionMatrix = m;
 }
 
 void MazeScene::drawBackground(QPainter *painter, const QRectF &)
@@ -247,7 +274,7 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &)
 
     const QRectF r(1, 1, m_width-2, m_height-2);
 
-    Matrix4x4 m = m_camera.matrix(0.001 * m_walkTime) * Matrix4x4::fromProjection(70);
+    Matrix4x4 m = m_camera.viewProjectionMatrix();
 
     Matrix4x4 floorMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
     floorMatrix *= Matrix4x4::fromTranslation(0, 0.5, 0);
@@ -291,6 +318,12 @@ void ProjectedItem::setPosition(const QPointF &a, const QPointF &b)
 {
     m_a = a;
     m_b = b;
+}
+
+void ProjectedItem::setLightingEnabled(bool enable)
+{
+    if (m_shadowItem)
+        m_shadowItem->setVisible(enable);
 }
 
 class ResizingView : public QGraphicsView
@@ -467,16 +500,15 @@ void WallItem::childResized()
     m_childItem->setCacheMode(QGraphicsItem::ItemCoordinateCache);
 }
 
-void ProjectedItem::setConstantLight(qreal light)
-{
-    if (m_shadowItem)
-        m_shadowItem->setBrush(QColor(0, 0, 0, int(light * 255)));
-}
-
-void ProjectedItem::updateLighting(const QVector<Light> &lights)
+void ProjectedItem::updateLighting(const QVector<Light> &lights, bool useConstantLight)
 {
     if (!m_shadowItem)
         return;
+
+    if (useConstantLight) {
+        m_shadowItem->setBrush(QColor(0, 0, 0, 100));
+        return;
+    }
 
     const qreal constantIntensity = 80;
     qreal la = constantIntensity;
@@ -533,7 +565,7 @@ void ProjectedItem::setImage(const QImage &image)
     update();
 }
 
-void ProjectedItem::updateTransform(const Camera &camera, qreal time)
+void ProjectedItem::updateTransform(const Camera &camera)
 {
     QTransform rotation;
     rotation *= QTransform().translate(-camera.pos().x(), -camera.pos().y());
@@ -556,7 +588,7 @@ void ProjectedItem::updateTransform(const Camera &camera, qreal time)
     Matrix4x4 m;
     m *= Matrix4x4::fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis);
     m *= Matrix4x4::fromTranslation(center.x(), 0, center.y());
-    m *= camera.matrix(time) * Matrix4x4::fromProjection(70);
+    m *= camera.viewProjectionMatrix();
 
     qreal zm = QLineF(camera.pos(), center).length();
 
@@ -696,7 +728,7 @@ bool MazeScene::tryMove(QPointF &pos, const QPointF &delta, Entity *entity) cons
 void MazeScene::updateTransforms()
 {
     foreach (ProjectedItem *item, m_projectedItems)
-        item->updateTransform(m_camera, m_walkTime * 0.001);
+        item->updateTransform(m_camera);
 
     foreach (WallItem *item, m_walls) {
         if (item->isVisible()) {
@@ -782,18 +814,19 @@ void MazeScene::move()
         }
     }
 
+    m_camera.setTime(m_walkTime * 0.001);
+
     if (walked || m_deltaYaw != 0 || m_deltaPitch != 0) {
         updateTransforms();
     } else {
         foreach (Entity *entity, movedEntities)
-            entity->updateTransform(m_camera, m_walkTime * 0.001);
+            entity->updateTransform(m_camera);
     }
 
     if (steps) {
         m_deltaYaw = 0;
         m_deltaPitch = 0;
     }
-
 }
 
 void MazeScene::toggleDoors()
@@ -826,12 +859,28 @@ void MazeScene::toggleRenderer()
     if (views().size() == 0)
         return;
     QGraphicsView *view = views().at(0);
-    if (view->viewport()->inherits("QGLWidget")) {
-        view->setViewport(new QWidget);
-        view->setRenderHints(QPainter::Antialiasing);
-    } else {
-        view->setViewport(new QGLWidget(QGLFormat(QGL::SampleBuffers)));
-        view->setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+    if (view) {
+        view->setViewport(
+                view->viewport()->inherits("QGLWidget")
+                ? new QWidget
+                : new QGLWidget(QGLFormat(QGL::SampleBuffers)));
+
+        updateRenderer();
     }
 #endif
+}
+
+void MazeScene::updateRenderer()
+{
+    QGraphicsView *view = views().isEmpty() ? 0 : views().at(0);
+    bool accelerated = view && view->viewport()->inherits("QGLWidget");
+    if (view) {
+        if (accelerated)
+            view->setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
+        else
+            view->setRenderHints(QPainter::Antialiasing);
+    }
+
+    foreach (WallItem *item, m_walls)
+        item->updateLighting(m_lights, item->type() == 2);
 }

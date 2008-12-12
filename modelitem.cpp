@@ -35,12 +35,12 @@
 #endif
 #endif
 
-void ModelItem::updateTransform(const Camera &camera, qreal time)
+void ModelItem::updateTransform(const Camera &camera)
 {
-    ProjectedItem::updateTransform(camera, time);
+    ProjectedItem::updateTransform(camera);
 
     setTransform(QTransform());
-    m_matrix = Matrix4x4::fromTranslation(3, 0, 7) * camera.matrix(time);
+    m_matrix = Matrix4x4::fromTranslation(3, 0, 7) * camera.viewMatrix();
 }
 
 QRectF ModelItem::boundingRect() const

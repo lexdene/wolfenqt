@@ -52,8 +52,11 @@ int main(int argc, char **argv)
     MazeScene *scene = new MazeScene(lights, map, 8, 12);
 
     View view;
+    view.resize(800, 600);
     view.setScene(scene);
     view.show();
+
+    scene->toggleRenderer();
 
     return app.exec();
 }

@@ -44,7 +44,6 @@ class View : public QGraphicsView
 {
     Q_OBJECT
 public:
-    View();
     void resizeEvent(QResizeEvent *event);
 };
 
@@ -54,23 +53,39 @@ public:
     Camera()
         : m_yaw(0)
         , m_pitch(0)
+        , m_fov(70)
+        , m_time(0)
+        , m_matrixDirty(true)
     {
     }
 
     qreal yaw() const { return m_yaw; }
     qreal pitch() const { return m_pitch; }
+    qreal fov() const { return m_fov; }
     QPointF pos() const { return m_pos; }
 
-    void setYaw(qreal yaw) { m_yaw = yaw; }
+    void setYaw(qreal yaw);
     void setPitch(qreal pitch);
-    void setPos(const QPointF &pos) { m_pos = pos; }
+    void setPos(const QPointF &pos);
+    void setFov(qreal fov);
+    void setTime(qreal time);
 
-    Matrix4x4 matrix(qreal time) const;
+    const Matrix4x4 &viewProjectionMatrix() const;
+    const Matrix4x4 &viewMatrix() const;
 
 private:
+    void updateMatrix() const;
+
     qreal m_yaw;
     qreal m_pitch;
+    qreal m_fov;
+    qreal m_time;
+
     QPointF m_pos;
+
+    mutable bool m_matrixDirty;
+    mutable Matrix4x4 m_viewMatrix;
+    mutable Matrix4x4 m_viewProjectionMatrix;
 };
 
 class Light
@@ -97,7 +112,7 @@ public:
     QPointF a() const { return m_a; }
     QPointF b() const { return m_b; }
 
-    virtual void updateTransform(const Camera &camera, qreal time);
+    virtual void updateTransform(const Camera &camera);
 
     QRectF boundingRect() const;
 
@@ -105,8 +120,9 @@ public:
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
     void setAnimationTime(qreal time);
     void setImage(const QImage &image);
-    void updateLighting(const QVector<Light> &lights);
-    void setConstantLight(qreal value);
+    void updateLighting(const QVector<Light> &lights, bool useConstantLight);
+
+    void setLightingEnabled(bool enabled);
 
 private:
     QPointF m_a;
@@ -172,6 +188,7 @@ private slots:
 private:
     bool blocked(const QPointF &pos, Entity *entity) const;
     void updateTransforms();
+    void updateRenderer();
 
     QVector<WallItem *> m_walls;
     QVector<WallItem *> m_doors;

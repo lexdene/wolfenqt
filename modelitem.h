@@ -45,7 +45,7 @@ class ModelItem : public QWidget, public ProjectedItem
 public:
     ModelItem();
 
-    void updateTransform(const Camera &camera, qreal time);
+    void updateTransform(const Camera &camera);
 
     QRectF boundingRect() const;
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);

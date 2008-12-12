@@ -34,7 +34,7 @@ class Entity : public QObject, public ProjectedItem
     Q_OBJECT
 public:
     Entity(const QPointF &pos);
-    void updateTransform(const Camera &camera, qreal time);
+    void updateTransform(const Camera &camera);
 
     QPointF pos() const { return m_pos; }
 

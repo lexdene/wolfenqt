@@ -96,7 +96,7 @@ static inline int mod(int x, int y)
     return ((x % y) + y) % y;
 }
 
-void Entity::updateTransform(const Camera &camera, qreal time)
+void Entity::updateTransform(const Camera &camera)
 {
     qreal angleToCamera = QLineF(m_pos, camera.pos()).angle();
     int cameraAngleIndex = mod(qRound(angleToCamera + 22.5), 360) / 45;
@@ -107,7 +107,7 @@ void Entity::updateTransform(const Camera &camera, qreal time)
     setPosition(m_pos - delta, m_pos + delta);
 
     updateImage();
-    ProjectedItem::updateTransform(camera, time);
+    ProjectedItem::updateTransform(camera);
 }
 
 bool Entity::move(MazeScene *scene)
