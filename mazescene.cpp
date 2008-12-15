@@ -747,6 +747,7 @@ void MazeScene::updateTransforms()
                            << Light(QPointF(1.5, 1.5), 0.4);
                     MazeScene *embeddedScene = new MazeScene(lights, map, 5, 5);
                     view->setScene(embeddedScene);
+                    view->setRenderHints(QPainter::SmoothPixmapTransform | QPainter::Antialiasing);
                 }
             }
         }
