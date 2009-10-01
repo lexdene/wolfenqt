@@ -174,9 +174,9 @@ void WalkingItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 void WalkingItem::updatePixmap()
 {
     if (m_walking)
-        setPixmap(m_standingPixmap);
-    else
         setPixmap(m_walkingPixmap);
+    else
+        setPixmap(m_standingPixmap);
 }
 
 MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, int height)
