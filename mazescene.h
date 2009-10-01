@@ -34,17 +34,23 @@
 #include <QTime>
 #include <QTimeLine>
 
-#include "matrix4x4.h"
+#include <QMatrix4x4>
 
 class MazeScene;
 class MediaPlayer;
 class Entity;
+class WalkingItem;
 
 class View : public QGraphicsView
 {
     Q_OBJECT
 public:
+    View();
     void resizeEvent(QResizeEvent *event);
+    void setScene(MazeScene *scene);
+
+private:
+    MazeScene *m_scene;
 };
 
 class Camera
@@ -70,8 +76,8 @@ public:
     void setFov(qreal fov);
     void setTime(qreal time);
 
-    const Matrix4x4 &viewProjectionMatrix() const;
-    const Matrix4x4 &viewMatrix() const;
+    const QMatrix4x4 &viewProjectionMatrix() const;
+    const QMatrix4x4 &viewMatrix() const;
 
 private:
     void updateMatrix() const;
@@ -84,8 +90,8 @@ private:
     QPointF m_pos;
 
     mutable bool m_matrixDirty;
-    mutable Matrix4x4 m_viewMatrix;
-    mutable Matrix4x4 m_viewProjectionMatrix;
+    mutable QMatrix4x4 m_viewMatrix;
+    mutable QMatrix4x4 m_viewProjectionMatrix;
 };
 
 class Light
@@ -168,6 +174,8 @@ public:
 
     Camera camera() const { return m_camera; }
 
+    void viewResized(QGraphicsView *view);
+
 protected:
     void mouseMoveEvent(QGraphicsSceneMouseEvent *event);
     void keyPressEvent(QKeyEvent *event);
@@ -216,6 +224,8 @@ private:
     int m_height;
     MediaPlayer *m_player;
     QPointF m_playerPos;
+
+    WalkingItem *m_walkingItem;
 };
 
 #endif

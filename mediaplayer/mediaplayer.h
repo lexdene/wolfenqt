@@ -30,7 +30,16 @@
 #include <QtGui/QShowEvent>
 #include <QtGui/QIcon>
 
-#include <phonon>
+#include <Phonon/AudioOutput>
+#include <Phonon/BackendCapabilities>
+#include <Phonon/Effect>
+#include <Phonon/EffectParameter>
+#include <Phonon/EffectWidget>
+#include <Phonon/MediaObject>
+#include <Phonon/SeekSlider>
+#include <Phonon/VideoWidget>
+#include <Phonon/VolumeSlider>
+
 QT_BEGIN_NAMESPACE
 class QPushButton;
 class QLabel;

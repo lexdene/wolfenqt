@@ -24,7 +24,7 @@
 #ifndef OPENGLSCENE_H
 #define OPENGLSCENE_H
 
-#include "point3d.h"
+#include <QVector3D>
 
 #include <QCheckBox>
 #include <QWidget>
@@ -35,6 +35,10 @@
 #endif
 
 #include "mazescene.h"
+
+QT_BEGIN_NAMESPACE
+class QGLShaderProgram;
+QT_END_NAMESPACE
 
 class Model;
 
@@ -75,9 +79,9 @@ private:
     int m_mouseEventTime;
 
     float m_distance;
-    Point3d m_rotation;
-    Point3d m_angularMomentum;
-    Point3d m_accumulatedMomentum;
+    QVector3D m_rotation;
+    QVector3D m_angularMomentum;
+    QVector3D m_accumulatedMomentum;
 
     QWidget *m_modelButton;
     QCheckBox *m_wireframe;
@@ -85,7 +89,11 @@ private:
 #ifndef QT_NO_CONCURRENT
     QFutureWatcher<Model *> m_modelLoader;
 #endif
-    Matrix4x4 m_matrix;
+    QMatrix4x4 m_matrix;
+
+#ifndef QT_NO_OPENGL
+    mutable QGLShaderProgram *m_program;
+#endif
 };
 
 #endif

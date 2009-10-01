@@ -29,6 +29,9 @@
 #include "mazescene.h"
 
 #ifndef QT_NO_OPENGL
+#ifndef QT_OPENGL_ES_2
+#include <GL/glew.h>
+#endif
 #include <QtOpenGL>
 #ifndef GL_MULTISAMPLE
 #define GL_MULTISAMPLE  0x809D
@@ -40,7 +43,7 @@ void ModelItem::updateTransform(const Camera &camera)
     ProjectedItem::updateTransform(camera);
 
     setTransform(QTransform());
-    m_matrix = Matrix4x4::fromTranslation(3, 0, 7) * camera.viewMatrix();
+    m_matrix = camera.viewMatrix() * QMatrix4x4().translate(3, 0, 7);
 }
 
 QRectF ModelItem::boundingRect() const
@@ -58,75 +61,106 @@ void ModelItem::updateItem()
     ProjectedItem::update();
 }
 
+const char *vertexProgram =
+    "attribute highp    vec4    vertexCoordsArray;"
+    "attribute highp    vec4    normalCoordsArray;"
+    "varying   highp    vec4    normal;"
+    "uniform   highp    mat4    pmvMatrix;"
+    "uniform   highp    mat4    modelMatrix;"
+    "void main(void)"
+    "{"
+    "        normal = modelMatrix * vec4(normalCoordsArray.xyz, 0);"
+    "        gl_Position = pmvMatrix * vertexCoordsArray;"
+    "}";
+
+const char *fragmentProgram =
+    "uniform   lowp     vec4    color;"
+    "varying   highp    vec4    normal;"
+    "void main() {"
+    "   lowp vec3 toLight = normalize(vec3(-0.9, -1, 0.6));"
+    "   gl_FragColor = color * (0.4 + 0.6 * max(dot(normalize(normal).xyz, toLight), 0.0));"
+    "}";
+
+QMatrix4x4 fromProjection(float fov);
+QMatrix4x4 fromRotation(float angle, Qt::Axis axis);
+
 void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
 {
     if (!m_model)
         return;
 
-    Matrix4x4 projectionMatrix = Matrix4x4::fromProjection(70);
-    projectionMatrix *= Matrix4x4::fromQTransform(painter->transform());
+    QMatrix4x4 projectionMatrix = QMatrix4x4(painter->transform()) * fromProjection(70);
 
-    Matrix4x4 modelMatrix;
     const int delta = m_time.elapsed() - m_lastTime;
     m_rotation += m_angularMomentum * (delta / 1000.0);
     m_lastTime += delta;
 
-    Point3d size = m_model->size();
+    QVector3D size = m_model->size();
     float extent = qSqrt(2.0);
-    float scale = 1 / qMax(size.y, qMax(size.x / extent, size.z / extent));
-    modelMatrix *= Matrix4x4::fromScale(scale, -scale, scale);
+    float scale = 1 / qMax(size.y(), qMax(size.x() / extent, size.z() / extent));
+    QMatrix4x4 modelMatrix = QMatrix4x4().scale(scale, -scale, scale);
 
-    modelMatrix *= Matrix4x4::fromRotation(m_rotation.z, Qt::ZAxis);
-    modelMatrix *= Matrix4x4::fromRotation(m_rotation.y, Qt::YAxis);
-    modelMatrix *= Matrix4x4::fromRotation(m_rotation.x, Qt::XAxis);
+    modelMatrix = fromRotation(m_rotation.z(), Qt::ZAxis) * modelMatrix;
+    modelMatrix = fromRotation(m_rotation.y(), Qt::YAxis) * modelMatrix;
+    modelMatrix = fromRotation(m_rotation.x(), Qt::XAxis) * modelMatrix;
 
     QTimer::singleShot(10, this, SLOT(updateItem()));
 
 #ifndef QT_NO_OPENGL
-    if (painter->paintEngine()->type() != QPaintEngine::OpenGL) {
+    if (painter->paintEngine()->type() != QPaintEngine::OpenGL
+        && painter->paintEngine()->type() != QPaintEngine::OpenGL2) {
 #endif
         m_wireframe->setEnabled(false);
         m_wireframe->setChecked(false);
         m_wireframeEnabled = false;
         painter->setTransform(QTransform());
         painter->setPen(m_modelColor);
-        m_model->render(painter, modelMatrix * m_matrix * projectionMatrix, m_normalsEnabled);
+        m_model->render(painter, projectionMatrix * m_matrix * modelMatrix, m_normalsEnabled);
         return;
 #ifndef QT_NO_OPENGL
     }
 
     m_wireframe->setEnabled(true);
 
+    painter->beginNativePainting();
+
+#ifdef QT_OPENGL_ES_2
+    glClearDepthf(0);
+#else
     glClearDepth(0);
+#endif
     glClear(GL_DEPTH_BUFFER_BIT);
 
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0, painter->device()->width(), painter->device()->height(), 0, -1, 1);
-    glMultMatrixf(projectionMatrix.data());
+    if (!m_program) {
+#ifndef QT_OPENGL_ES_2
+        glewInit();
+#endif
+        m_program = new QGLShaderProgram;
+        m_program->addShader(QGLShader::FragmentShader, fragmentProgram);
+        m_program->addShader(QGLShader::VertexShader, vertexProgram);
+        m_program->bindAttributeLocation("vertexCoordsArray", 0);
+        m_program->bindAttributeLocation("normalCoordsArray", 1);
+        m_program->link();
 
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadMatrixf(m_matrix.data());
+        if (!m_program->isLinked())
+            qDebug() << m_program->log();
+    }
 
-    const float ambient[] = { 0.1, 0.1, 0.1, 1 };
-    const float pos[] = { 50, -500, 200 };
-    glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
-    glLightfv(GL_LIGHT0, GL_POSITION, pos);
+    qreal ortho[] = {
+        2.0f / painter->device()->width(), 0, 0, -1,
+        0, -2.0f / painter->device()->height(), 0, 1,
+        0, 0, -1, 0,
+        0, 0, 0, 1
+    };
 
-    glMultMatrixf(modelMatrix.data());
-
-    glColor4f(m_modelColor.redF(), m_modelColor.greenF(), m_modelColor.blueF(), 1.0f);
-
-    glEnable(GL_MULTISAMPLE);
+    m_program->enable();
+    m_program->setUniformValue("color", m_modelColor);
+    m_program->setUniformValue("pmvMatrix", QMatrix4x4(ortho) * projectionMatrix * m_matrix * modelMatrix);
+    m_program->setUniformValue("modelMatrix", modelMatrix);
     m_model->render(m_wireframeEnabled, m_normalsEnabled);
-    glDisable(GL_MULTISAMPLE);
+    m_program->disable();
 
-    glPopMatrix();
-
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
+    painter->endNativePainting();
 #endif
 }
 
@@ -140,6 +174,9 @@ ModelItem::ModelItem()
     , m_lastTime(0)
     , m_distance(1.4f)
     , m_angularMomentum(0, 40, 0)
+#ifndef QT_NO_OPENGL
+    , m_program(0)
+#endif
 {
     QPointF pos(3, 7);
     setPosition(pos, pos);

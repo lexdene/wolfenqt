@@ -11,7 +11,10 @@ QMAKE_CXXFLAGS += -g
 
 QT += webkit script
 
-contains(QT_CONFIG, opengl):QT += opengl
+contains(QT_CONFIG, opengl):{
+QT += opengl
+unix:!contains(QT_CONFIG, opengles2): LIBS += -lGLEW
+}
 
 contains(QT_CONFIG, phonon):{
 DEPENDPATH += mediaplayer
@@ -33,9 +36,9 @@ DEPLOYMENT_PLUGIN += phonon_ds9 phonon_waveout
 }
 
 # Input
-HEADERS += entity.h mazescene.h matrix4x4.h scriptwidget.h
-SOURCES += main.cpp entity.cpp mazescene.cpp matrix4x4.cpp scriptwidget.cpp
+HEADERS += entity.h mazescene.h scriptwidget.h
+SOURCES += main.cpp entity.cpp mazescene.cpp scriptwidget.cpp
 
 # From modelviewer
-HEADERS += modelitem.h point3d.h model.h
+HEADERS += modelitem.h model.h
 SOURCES += model.cpp modelitem.cpp

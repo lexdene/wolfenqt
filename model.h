@@ -30,8 +30,8 @@
 
 #include <math.h>
 
-#include "point3d.h"
-#include "matrix4x4.h"
+#include <QMatrix4x4>
+#include <QVector3D>
 
 class Model
 {
@@ -40,25 +40,33 @@ public:
     Model(const QString &filePath);
 
     void render(bool wireframe = false, bool normals = false) const;
-    void render(QPainter *painter, const Matrix4x4 &matrix, bool normals = false) const;
+    void render(QPainter *painter, const QMatrix4x4 &matrix, bool normals = false) const;
 
     QString fileName() const { return m_fileName; }
     int faces() const { return m_pointIndices.size() / 3; }
     int edges() const { return m_edgeIndices.size() / 2; }
     int points() const { return m_points.size(); }
 
-    Point3d size() const;
+    QVector3D size() const;
 
 private:
     QString m_fileName;
-    QVector<Point3d> m_points;
-    QVector<Point3d> m_normals;
-    QVector<int> m_edgeIndices;
-    QVector<int> m_pointIndices;
-    Point3d m_size;
+
+    QVector<QVector3D> m_points;
+    QVector<QVector3D> m_normals;
+
+#ifdef QT_OPENGL_ES_2
+    QVector<ushort> m_edgeIndices;
+    QVector<ushort> m_pointIndices;
+#else
+    QVector<uint> m_edgeIndices;
+    QVector<uint> m_pointIndices;
+#endif
+
+    QVector3D m_size;
 
     mutable QVector<QLineF> m_lines;
-    mutable QVector<Point3d> m_mapped;
+    mutable QVector<QVector3D> m_mapped;
 };
 
 #endif

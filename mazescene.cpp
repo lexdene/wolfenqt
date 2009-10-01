@@ -40,6 +40,8 @@
 #include "entity.h"
 #include "modelitem.h"
 
+#include <QVector3D>
+
 #ifdef USE_PHONON
 #include "mediaplayer/mediaplayer.h"
 #endif
@@ -48,11 +50,27 @@
 #include <QGLWidget>
 #endif
 
+View::View()
+    : m_scene(0)
+{
+}
+
+void View::setScene(MazeScene *scene)
+{
+    QGraphicsView::setScene(scene);
+
+    m_scene = scene;
+    m_scene->viewResized(this);
+}
+
 void View::resizeEvent(QResizeEvent *)
 {
     resetMatrix();
     qreal factor = width() / 4.0;
     scale(factor, factor);
+
+    if (m_scene)
+        m_scene->viewResized(this);
 }
 
 Light::Light(const QPointF &pos, qreal intensity)
@@ -69,6 +87,96 @@ qreal Light::intensityAt(const QPointF &pos) const
     const qreal d = QLineF(m_pos, pos).length();
     return quadraticIntensity / (d * d)
         + linearIntensity / d;
+}
+
+QMatrix4x4 fromRotation(float angle, Qt::Axis axis)
+{
+    QMatrix4x4 m;
+    if (axis == Qt::XAxis)
+        m.rotate(angle, QVector3D(1, 0, 0));
+    else if (axis == Qt::YAxis)
+        m.rotate(-angle, QVector3D(0, 1, 0));
+    else if (axis == Qt::ZAxis)
+        m.rotate(angle, QVector3D(0, 0, 1));
+    return m;
+}
+
+QMatrix4x4 fromProjection(float fovAngle)
+{
+    float fov = qCos(fovAngle / 2) / qSin(fovAngle / 2);
+
+    float zNear = 0.01;
+    float zFar = 1000;
+
+    float m33 = (zNear + zFar) / (zNear - zFar);
+    float m34 = (2 * zNear * zFar) / (zNear - zFar);
+
+    qreal data[] =
+    {
+        fov, 0, 0, 0,
+        0, fov, 0, 0,
+        0, 0, m33, m34,
+        0, 0, -1, 0
+    };
+    return QMatrix4x4(data);
+}
+
+class WalkingItem : public QGraphicsPixmapItem
+{
+public:
+    WalkingItem(MazeScene *scene);
+
+    void mousePressEvent(QGraphicsSceneMouseEvent *event);
+
+    bool walking() const { return m_walking; }
+
+private:
+    void updatePixmap();
+
+    MazeScene *m_scene;
+    bool m_walking;
+
+    QPixmap m_walkingPixmap;
+    QPixmap m_standingPixmap;
+};
+
+QPixmap colorize(const QPixmap &source, const QColor &color)
+{
+    QImage temp(source.size(), QImage::Format_ARGB32_Premultiplied);
+
+    temp.fill(0x0);
+    QPainter p(&temp);
+    p.drawPixmap(0, 0, source);
+    p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    p.fillRect(temp.rect(), color);
+    p.end();
+
+    return QPixmap::fromImage(temp);
+}
+
+WalkingItem::WalkingItem(MazeScene *scene)
+    : m_scene(scene)
+    , m_walking(false)
+    , m_walkingPixmap(colorize(QPixmap("walking.png"), QColor(Qt::green).darker()))
+    , m_standingPixmap(colorize(QPixmap("standing.png"), QColor(Qt::green).darker()))
+{
+    setShapeMode(BoundingRectShape);
+    updatePixmap();
+}
+
+void WalkingItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
+{
+    event->accept();
+    m_walking = !m_walking;
+    updatePixmap();
+}
+
+void WalkingItem::updatePixmap()
+{
+    if (m_walking)
+        setPixmap(m_standingPixmap);
+    else
+        setPixmap(m_walkingPixmap);
 }
 
 MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, int height)
@@ -138,6 +246,20 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
     m_time.start();
     updateTransforms();
     updateRenderer();
+
+    m_walkingItem = new WalkingItem(this);
+    m_walkingItem->scale(0.008, 0.008);
+    m_walkingItem->setZValue(100000);
+
+    addItem(m_walkingItem);
+}
+
+void MazeScene::viewResized(QGraphicsView *view)
+{
+    QRectF bounds = m_walkingItem->sceneBoundingRect();
+    QPointF bottomLeft = view->mapToScene(QPoint(5, view->height() - 5));
+
+    m_walkingItem->setPos(bottomLeft.x(), bottomLeft.y() - bounds.height());
 }
 
 void MazeScene::addProjectedItem(ProjectedItem *item)
@@ -230,13 +352,13 @@ void Camera::setTime(qreal time)
 }
 
 
-const Matrix4x4 &Camera::viewMatrix() const
+const QMatrix4x4 &Camera::viewMatrix() const
 {
     updateMatrix();
     return m_viewMatrix;
 }
 
-const Matrix4x4 &Camera::viewProjectionMatrix() const
+const QMatrix4x4 &Camera::viewProjectionMatrix() const
 {
     updateMatrix();
     return m_viewProjectionMatrix;
@@ -249,13 +371,13 @@ void Camera::updateMatrix() const
 
     m_matrixDirty = false;
 
-    Matrix4x4 m;
-    m *= Matrix4x4::fromTranslation(-m_pos.x(), 0.04 * qSin(10 * m_time) + 0.1, -m_pos.y());
-    m *= Matrix4x4::fromRotation(m_yaw + 180, Qt::YAxis);
-    m *= Matrix4x4::fromScale(-1, 1, 1);
-    m *= Matrix4x4::fromRotation(m_pitch, Qt::XAxis);
+    QMatrix4x4 m;
+    m = QMatrix4x4().translate(-m_pos.x(), 0.04 * qSin(10 * m_time) + 0.1, -m_pos.y()) * m;
+    m = fromRotation(m_yaw + 180, Qt::YAxis) * m;
+    m = QMatrix4x4().scale(-1, 1, 1) * m;
+    m = fromRotation(m_pitch, Qt::XAxis) * m;
     m_viewMatrix = m;
-    m *= Matrix4x4::fromProjection(m_fov);
+    m = fromProjection(m_fov) * m;
     m_viewProjectionMatrix = m;
 }
 
@@ -274,23 +396,23 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &)
 
     const QRectF r(1, 1, m_width-2, m_height-2);
 
-    Matrix4x4 m = m_camera.viewProjectionMatrix();
+    QMatrix4x4 m = m_camera.viewProjectionMatrix();
 
-    Matrix4x4 floorMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
-    floorMatrix *= Matrix4x4::fromTranslation(0, 0.5, 0);
-    floorMatrix *= m;
+    QMatrix4x4 floorMatrix = fromRotation(90, Qt::XAxis);
+    floorMatrix = QMatrix4x4().translate(0, 0.5, 0) * floorMatrix;
+    floorMatrix = m * floorMatrix;
 
     painter->save();
-    painter->setTransform(floorMatrix.toQTransform(), true);
+    painter->setTransform(floorMatrix.toTransform(0), true);
     painter->fillRect(r, floorBrush);
     painter->restore();
 
-    Matrix4x4 ceilingMatrix = Matrix4x4::fromRotation(90, Qt::XAxis);
-    ceilingMatrix *= Matrix4x4::fromTranslation(0, -0.5, 0);
-    ceilingMatrix *= m;
+    QMatrix4x4 ceilingMatrix = fromRotation(90, Qt::XAxis);
+    ceilingMatrix = QMatrix4x4().translate(0, -0.5, 0) * ceilingMatrix;
+    ceilingMatrix = m * ceilingMatrix;
 
     painter->save();
-    painter->setTransform(ceilingMatrix.toQTransform(), true);
+    painter->setTransform(ceilingMatrix.toTransform(0), true);
     painter->fillRect(r, ceilingBrush);
     painter->restore();
 }
@@ -325,16 +447,6 @@ void ProjectedItem::setLightingEnabled(bool enable)
     if (m_shadowItem)
         m_shadowItem->setVisible(enable);
 }
-
-class ResizingView : public QGraphicsView
-{
-protected:
-    void resizeEvent(QResizeEvent *event) {
-        if (scene())
-            scene()->setSceneRect(QRect(QPoint(0, 0), event->size()));
-        QGraphicsView::resizeEvent(event);
-    }
-};
 
 class ProxyWidget : public QGraphicsProxyWidget
 {
@@ -443,7 +555,6 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
 
             QWebView *view = new QWebView;
             view->setUrl(QUrl(url));
-
             childWidget = view;
         }
 
@@ -585,16 +696,16 @@ void ProjectedItem::updateTransform(const Camera &camera)
         return;
     }
 
-    Matrix4x4 m;
-    m *= Matrix4x4::fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis);
-    m *= Matrix4x4::fromTranslation(center.x(), 0, center.y());
-    m *= camera.viewProjectionMatrix();
+    QMatrix4x4 m;
+    m = fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis) * m;
+    m = QMatrix4x4().translate(center.x(), 0, center.y()) * m;
+    m = camera.viewProjectionMatrix() * m;
 
     qreal zm = QLineF(camera.pos(), center).length();
 
     setVisible(true);
     setZValue(-zm);
-    setTransform(m.toQTransform());
+    setTransform(m.toTransform(0));
 }
 
 
@@ -605,7 +716,7 @@ void MazeScene::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
         return;
     }
 
-    if (event->buttons() & Qt::RightButton) {
+    if (event->buttons() & Qt::LeftButton) {
         QPointF delta(event->scenePos() - event->lastScenePos());
         m_deltaYaw += delta.x() * 80;
         m_deltaPitch -= delta.y() * 80;
@@ -780,13 +891,17 @@ void MazeScene::move()
         m_deltaPitch += m_pitchSpeed;
     }
 
+    qreal walkingVelocity = m_walkingVelocity;
+    if (m_walkingItem->walking())
+        walkingVelocity = 0.005;
+
     for (int i = 0; i < steps; ++i) {
         m_camera.setYaw(m_camera.yaw() + m_deltaYaw);
         m_camera.setPitch(m_camera.pitch() + m_deltaPitch);
 
         bool walking = false;
-        if (m_walkingVelocity != 0) {
-            QPointF walkingDelta = QLineF::fromPolar(m_walkingVelocity, m_camera.yaw() - 90).p2();
+        if (walkingVelocity != 0) {
+            QPointF walkingDelta = QLineF::fromPolar(walkingVelocity, m_camera.yaw() - 90).p2();
             QPointF pos = m_camera.pos();
             if (tryMove(pos, walkingDelta)) {
                 walking = true;

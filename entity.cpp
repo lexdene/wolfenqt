@@ -122,9 +122,9 @@ bool Entity::move(MazeScene *scene)
                 angleToTarget -= 360;
 
             if (angleToTarget < 0)
-                m_angle -= qMin(-angleToTarget, 0.5);
+                m_angle -= qMin(-angleToTarget, qreal(0.5));
             else
-                m_angle += qMin(angleToTarget, 0.5);
+                m_angle += qMin(angleToTarget, qreal(0.5));
             moved = true;
         }
     } else if (m_turnVelocity != 0) {
