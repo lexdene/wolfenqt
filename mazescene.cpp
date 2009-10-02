@@ -212,6 +212,8 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
     types['!'] = 6;
     types['='] = 7;
     types['*'] = 8;
+    types['/'] = 9;
+    types['.'] = 10;
 
     int type;
     for (int y = 0; y < height; ++y) {
@@ -493,16 +495,6 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         break;
     }
 
-    static const char *urls[] =
-    {
-        "http://www.google.com",
-        "http://www.wikipedia.com",
-        "http://programming.reddit.com",
-        "http://www.trolltech.com",
-        "http://www.planetkde.org",
-        "http://labs.trolltech.com/blogs/"
-    };
-
     m_scale = 0.8;
 
     m_childItem = 0;
@@ -536,29 +528,23 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         childWidget = dialog;
         scene->addProjectedItem(dialog);
         m_scale = 0.5;
-    } else if (type == 0 || type == 2) {
-        static int index;
-        if (index == 0) {
-#ifndef QT_NO_OPENGL
-            QWidget *widget = new QWidget;
-            QCheckBox *checkBox = new QCheckBox("Use OpenGL", widget);
-            checkBox->setChecked(true);
-            QObject::connect(checkBox, SIGNAL(toggled(bool)), scene, SLOT(toggleRenderer()), Qt::QueuedConnection);
-            widget->setLayout(new QVBoxLayout);
-            widget->layout()->addWidget(checkBox);
-            childWidget = widget;
-            m_scale = 0.2;
-#endif
-        } else if (!(index % 7)) {
-            static int webIndex = 0;
-            const char *url = urls[webIndex++ % (sizeof(urls)/sizeof(char*))];
-
+    } else if (type == 9) {
+        if (a.x() > b.x()) {
             QWebView *view = new QWebView;
-            view->setUrl(QUrl(url));
+            view->setUrl(QUrl(QLatin1String("http://www.google.com")));
             childWidget = view;
         }
-
-        ++index;
+    } else if (type == 10) {
+#ifndef QT_NO_OPENGL
+        QWidget *widget = new QWidget;
+        QCheckBox *checkBox = new QCheckBox("Use OpenGL", widget);
+        checkBox->setChecked(true);
+        QObject::connect(checkBox, SIGNAL(toggled(bool)), scene, SLOT(toggleRenderer()), Qt::QueuedConnection);
+        widget->setLayout(new QVBoxLayout);
+        widget->layout()->addWidget(checkBox);
+        childWidget = widget;
+        m_scale = 0.2;
+#endif
     }
 
     if (!childWidget)
