@@ -36,6 +36,8 @@
 #include <qmath.h>
 #include <qdebug.h>
 
+#include <limits>
+
 #include "scriptwidget.h"
 #include "entity.h"
 #include "modelitem.h"
