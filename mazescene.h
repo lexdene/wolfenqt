@@ -113,12 +113,15 @@ private:
 class ProjectedItem : public QGraphicsItem
 {
 public:
-    ProjectedItem(const QRectF &bounds, bool shadow = true);
+    ProjectedItem(const QRectF &bounds, bool shadow = true, bool opaque = true);
 
     QPointF a() const { return m_a; }
     QPointF b() const { return m_b; }
 
     virtual void updateTransform(const Camera &camera);
+
+    void setOpaque(bool opaque);
+    bool isOpaque() const;
 
     QRectF boundingRect() const;
 
@@ -130,6 +133,9 @@ public:
 
     void setLightingEnabled(bool enabled);
 
+    void setObscured(bool obscured);
+    bool isObscured() const;
+
 private:
     QPointF m_a;
     QPointF m_b;
@@ -137,6 +143,9 @@ private:
     QRectF m_targetRect;
     QImage m_image;
     QGraphicsRectItem *m_shadowItem;
+
+    bool m_opaque;
+    bool m_obscured;
 };
 
 class WallItem : public ProjectedItem

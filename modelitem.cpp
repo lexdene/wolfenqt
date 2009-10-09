@@ -38,8 +38,17 @@
 #endif
 #endif
 
+#include <QVector2D>
+
 void ModelItem::updateTransform(const Camera &camera)
 {
+    QPointF pos(3, 7);
+
+    QVector2D toCamera = QVector2D(camera.pos() - pos).normalized();
+    QPointF delta(toCamera.y(), -toCamera.x());
+
+    setPosition(pos - delta, pos + delta);
+
     ProjectedItem::updateTransform(camera);
 
     setTransform(QTransform());
@@ -86,7 +95,7 @@ QMatrix4x4 fromRotation(float angle, Qt::Axis axis);
 
 void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
 {
-    if (!m_model)
+    if (!m_model || isObscured())
         return;
 
     QMatrix4x4 projectionMatrix = QMatrix4x4(painter->transform()) * fromProjection(70);
@@ -166,7 +175,7 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
 
 
 ModelItem::ModelItem()
-    : ProjectedItem(QRectF(), false)
+    : ProjectedItem(QRectF(), false, false)
     , m_wireframeEnabled(false)
     , m_normalsEnabled(false)
     , m_modelColor(153, 255, 0)
@@ -178,8 +187,6 @@ ModelItem::ModelItem()
     , m_program(0)
 #endif
 {
-    QPointF pos(3, 7);
-    setPosition(pos, pos);
     setLayout(new QVBoxLayout);
 
     m_modelButton = new QPushButton(tr("Load model"));

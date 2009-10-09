@@ -38,7 +38,7 @@ const QImage toAlpha(const QImage &image)
 }
 
 Entity::Entity(const QPointF &pos)
-    : ProjectedItem(QRectF(-0.3, -0.4, 0.6, 0.9), false)
+    : ProjectedItem(QRectF(-0.3, -0.4, 0.6, 0.9), false, false)
     , m_pos(pos)
     , m_angle(180)
     , m_walking(false)

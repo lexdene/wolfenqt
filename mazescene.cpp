@@ -425,9 +425,11 @@ void MazeScene::addEntity(Entity *entity)
     m_entities << entity;
 }
 
-ProjectedItem::ProjectedItem(const QRectF &bounds, bool shadow)
+ProjectedItem::ProjectedItem(const QRectF &bounds, bool shadow, bool opaque)
     : m_bounds(bounds)
     , m_shadowItem(0)
+    , m_opaque(opaque)
+    , m_obscured(false)
 {
     if (shadow) {
         m_shadowItem = new QGraphicsRectItem(bounds, this);
@@ -436,6 +438,16 @@ ProjectedItem::ProjectedItem(const QRectF &bounds, bool shadow)
     }
 
     m_targetRect = m_bounds;
+}
+
+void ProjectedItem::setOpaque(bool opaque)
+{
+    m_opaque = opaque;
+}
+
+bool ProjectedItem::isOpaque() const
+{
+    return m_opaque;
 }
 
 void ProjectedItem::setPosition(const QPointF &a, const QPointF &b)
@@ -489,6 +501,7 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         setImage(book);
         break;
     case 2:
+        setOpaque(false);
         break;
     default:
         setImage(brown);
@@ -662,36 +675,48 @@ void ProjectedItem::setImage(const QImage &image)
     update();
 }
 
+void ProjectedItem::setObscured(bool obscured)
+{
+    m_obscured = obscured;
+}
+
+bool ProjectedItem::isObscured() const
+{
+    return m_obscured;
+}
+
 void ProjectedItem::updateTransform(const Camera &camera)
 {
-    QTransform rotation;
-    rotation *= QTransform().translate(-camera.pos().x(), -camera.pos().y());
-    rotation *= rotatingTransform(camera.yaw());
-    QPointF center = (m_a + m_b) / 2;
+    if (!m_obscured) {
+        QTransform rotation;
+        rotation *= QTransform().translate(-camera.pos().x(), -camera.pos().y());
+        rotation *= rotatingTransform(camera.yaw());
+        QPointF center = (m_a + m_b) / 2;
 
-    QPointF ca = rotation.map(m_a);
-    QPointF cb = rotation.map(m_b);
+        QPointF ca = rotation.map(m_a);
+        QPointF cb = rotation.map(m_b);
 
-    if (ca.y() <= 0 && cb.y() <= 0) {
-        // hide the item by placing it far outside the scene
-        // we could use setVisible() but that causes unnecessary
-        // update to cahced items
-        QTransform transform;
-        transform.translate(-1000, -1000);
-        setTransform(transform);
-        return;
+        if (ca.y() > 0 || cb.y() > 0) {
+            QMatrix4x4 m;
+            m = fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis) * m;
+            m = QMatrix4x4().translate(center.x(), 0, center.y()) * m;
+            m = camera.viewProjectionMatrix() * m;
+
+            qreal zm = QLineF(camera.pos(), center).length();
+
+            setVisible(true);
+            setZValue(-zm);
+            setTransform(m.toTransform(0));
+            return;
+        }
     }
 
-    QMatrix4x4 m;
-    m = fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis) * m;
-    m = QMatrix4x4().translate(center.x(), 0, center.y()) * m;
-    m = camera.viewProjectionMatrix() * m;
-
-    qreal zm = QLineF(camera.pos(), center).length();
-
-    setVisible(true);
-    setZValue(-zm);
-    setTransform(m.toTransform(0));
+    // hide the item by placing it far outside the scene
+    // we could use setVisible() but that causes unnecessary
+    // update to cahced items
+    QTransform transform;
+    transform.translate(-1000, -1000);
+    setTransform(transform);
 }
 
 
@@ -822,13 +847,124 @@ bool MazeScene::tryMove(QPointF &pos, const QPointF &delta, Entity *entity) cons
     return pos != old;
 }
 
+struct Span
+{
+    ProjectedItem *item;
+
+    // screen coordinates
+    float sx1;
+    float sx2;
+
+    float cy;
+};
+
+int split(QList<Span> &list, float x)
+{
+    for (int i = 0; i < list.size(); ++i) {
+        Span &span = list[i];
+        if (span.sx2 == x)
+            return i+1;
+
+        if (span.sx1 <= x && span.sx2 > x) {
+            Span split = span;
+            span.sx2 = x;
+            split.sx1 = x;
+            list.insert(i+1, split);
+            return i+1;
+        }
+    }
+    return -1;
+}
+
+bool insertSpan(QList<Span> &list, const Span &span, bool checkOnly)
+{
+    int left = split(list, span.sx1);
+    int right = split(list, span.sx2);
+
+    bool visible = false;
+    for (int i = left; i < right; ++i) {
+        Span &s = list[i];
+        if (s.cy > span.cy) {
+            visible = true;
+            if (!checkOnly) {
+                s.item = span.item;
+                s.cy = span.cy;
+            }
+        }
+    }
+    return visible;
+}
+
+bool insertProjectedItem(QList<Span> &list, ProjectedItem *item, const QTransform &cameraTransform, bool checkOnly)
+{
+    QPointF ca = cameraTransform.map(item->a());
+    QPointF cb = cameraTransform.map(item->b());
+
+    if (ca.y() <= 0 && cb.y() <= 0)
+        return false;
+
+    const float clip = 0.0001;
+    if (ca.y() <= 0) {
+        float t = (clip - ca.y()) / (cb.y() - ca.y());
+        ca.setX(ca.x() + t * (cb.x() - ca.x()));
+        ca.setY(clip);
+    } else if(cb.y() <= 0) {
+        float t = (clip - ca.y()) / (cb.y() - ca.y());
+        cb.setX(ca.x() + t * (cb.x() - ca.x()));
+        cb.setY(clip);
+    }
+
+    Span span;
+    span.item = item;
+    span.sx1 = ca.x() / ca.y();
+    span.sx2 = cb.x() / cb.y();
+    span.cy = (ca.y() + cb.y()) * 0.5f;
+
+    if (span.sx1 >= span.sx2)
+        qSwap(span.sx1, span.sx2);
+
+    return insertSpan(list, span, checkOnly);
+}
+
 void MazeScene::updateTransforms()
 {
+    Span span;
+    span.item = 0;
+    span.sx1 = -std::numeric_limits<float>::infinity();
+    span.sx2 =  std::numeric_limits<float>::infinity();
+    span.cy = std::numeric_limits<float>::infinity();
+
+    QList<Span> visibleList;
+    visibleList << span;
+
+    QTransform rotation;
+    rotation *= QTransform().translate(-m_camera.pos().x(), -m_camera.pos().y());
+    rotation *= rotatingTransform(m_camera.yaw());
+
+    // first add all opaque items
+    foreach (ProjectedItem *item, m_projectedItems) {
+        if (item->isOpaque()) {
+            item->setObscured(true);
+            insertProjectedItem(visibleList, item, rotation, false);
+        }
+    }
+
+    // mark visible opaque items
+    for (int i = 0; i < visibleList.size(); ++i)
+        if (visibleList.at(i).item)
+            visibleList.at(i).item->setObscured(false);
+
+    // now add all non-opaque items
+    foreach (ProjectedItem *item, m_projectedItems) {
+        if (!item->isOpaque())
+            item->setObscured(!insertProjectedItem(visibleList, item, rotation, true));
+    }
+
     foreach (ProjectedItem *item, m_projectedItems)
         item->updateTransform(m_camera);
 
     foreach (WallItem *item, m_walls) {
-        if (item->isVisible()) {
+        if (item->isVisible() && !item->isObscured()) {
             // embed recursive scene
             if (QGraphicsProxyWidget *child = item->childItem()) {
                 View *view = qobject_cast<View *>(child->widget());
@@ -951,8 +1087,18 @@ void MazeScene::toggleDoors()
 
 void MazeScene::moveDoors(qreal value)
 {
-    foreach (WallItem *item, m_doors)
+    bool opaqueStatusChanged = false;
+    foreach (WallItem *item, m_doors) {
         item->setAnimationTime(1 - value);
+
+        bool shouldBeOpaque = qFuzzyCompare(value, 1);
+        if (item->isOpaque() != shouldBeOpaque) {
+            opaqueStatusChanged = true;
+            item->setOpaque(shouldBeOpaque);
+        }
+    }
+    if (opaqueStatusChanged)
+        updateTransforms();
 }
 
 void MazeScene::toggleRenderer()
