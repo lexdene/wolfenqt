@@ -52,7 +52,9 @@ void ModelItem::updateTransform(const Camera &camera)
     ProjectedItem::updateTransform(camera);
 
     setTransform(QTransform());
-    m_matrix = camera.viewMatrix() * QMatrix4x4().translate(3, 0, 7);
+
+    m_matrix = camera.viewMatrix();
+    m_matrix.translate(3, 0, 7);
 }
 
 QRectF ModelItem::boundingRect() const
@@ -107,7 +109,8 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
     QVector3D size = m_model->size();
     float extent = qSqrt(2.0);
     float scale = 1 / qMax(size.y(), qMax(size.x() / extent, size.z() / extent));
-    QMatrix4x4 modelMatrix = QMatrix4x4().scale(scale, -scale, scale);
+    QMatrix4x4 modelMatrix;
+    modelMatrix.scale(scale, -scale, scale);
 
     modelMatrix = fromRotation(m_rotation.z(), Qt::ZAxis) * modelMatrix;
     modelMatrix = fromRotation(m_rotation.y(), Qt::YAxis) * modelMatrix;
@@ -145,8 +148,8 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
         glewInit();
 #endif
         m_program = new QGLShaderProgram;
-        m_program->addShader(QGLShader::FragmentShader, fragmentProgram);
-        m_program->addShader(QGLShader::VertexShader, vertexProgram);
+        m_program->addShaderFromSourceCode(QGLShader::Fragment, fragmentProgram);
+        m_program->addShaderFromSourceCode(QGLShader::Vertex, vertexProgram);
         m_program->bindAttributeLocation("vertexCoordsArray", 0);
         m_program->bindAttributeLocation("normalCoordsArray", 1);
         m_program->link();
@@ -162,12 +165,12 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
         0, 0, 0, 1
     };
 
-    m_program->enable();
+    m_program->bind();
     m_program->setUniformValue("color", m_modelColor);
     m_program->setUniformValue("pmvMatrix", QMatrix4x4(ortho) * projectionMatrix * m_matrix * modelMatrix);
     m_program->setUniformValue("modelMatrix", modelMatrix);
     m_model->render(m_wireframeEnabled, m_normalsEnabled);
-    m_program->disable();
+    m_program->release();
 
     painter->endNativePainting();
 #endif

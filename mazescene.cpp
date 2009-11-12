@@ -376,13 +376,12 @@ void Camera::updateMatrix() const
     m_matrixDirty = false;
 
     QMatrix4x4 m;
-    m = QMatrix4x4().translate(-m_pos.x(), 0.04 * qSin(10 * m_time) + 0.1, -m_pos.y()) * m;
-    m = fromRotation(m_yaw + 180, Qt::YAxis) * m;
-    m = QMatrix4x4().scale(-1, 1, 1) * m;
+    m.scale(-1, 1, 1);
+    m *= fromRotation(m_yaw + 180, Qt::YAxis);
+    m.translate(-m_pos.x(), 0.04 * qSin(10 * m_time) + 0.1, -m_pos.y());
     m = fromRotation(m_pitch, Qt::XAxis) * m;
     m_viewMatrix = m;
-    m = fromProjection(m_fov) * m;
-    m_viewProjectionMatrix = m;
+    m_viewProjectionMatrix = fromProjection(m_fov) * m_viewMatrix;
 }
 
 void MazeScene::drawBackground(QPainter *painter, const QRectF &)
@@ -402,18 +401,18 @@ void MazeScene::drawBackground(QPainter *painter, const QRectF &)
 
     QMatrix4x4 m = m_camera.viewProjectionMatrix();
 
-    QMatrix4x4 floorMatrix = fromRotation(90, Qt::XAxis);
-    floorMatrix = QMatrix4x4().translate(0, 0.5, 0) * floorMatrix;
-    floorMatrix = m * floorMatrix;
+    QMatrix4x4 floorMatrix = m;
+    floorMatrix.translate(0, 0.5, 0);
+    floorMatrix *= fromRotation(90, Qt::XAxis);
 
     painter->save();
     painter->setTransform(floorMatrix.toTransform(0), true);
     painter->fillRect(r, floorBrush);
     painter->restore();
 
-    QMatrix4x4 ceilingMatrix = fromRotation(90, Qt::XAxis);
-    ceilingMatrix = QMatrix4x4().translate(0, -0.5, 0) * ceilingMatrix;
-    ceilingMatrix = m * ceilingMatrix;
+    QMatrix4x4 ceilingMatrix = m;
+    ceilingMatrix.translate(0, -0.5, 0);
+    ceilingMatrix *= fromRotation(90, Qt::XAxis);
 
     painter->save();
     painter->setTransform(ceilingMatrix.toTransform(0), true);
@@ -699,10 +698,9 @@ void ProjectedItem::updateTransform(const Camera &camera)
         QPointF cb = rotation.map(m_b);
 
         if (ca.y() > 0 || cb.y() > 0) {
-            QMatrix4x4 m;
-            m = fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis) * m;
-            m = QMatrix4x4().translate(center.x(), 0, center.y()) * m;
-            m = camera.viewProjectionMatrix() * m;
+            QMatrix4x4 m = camera.viewProjectionMatrix();
+            m.translate(center.x(), 0, center.y());
+            m *= fromRotation(-QLineF(m_b, m_a).angle(), Qt::YAxis);
 
             qreal zm = QLineF(camera.pos(), center).length();
 
