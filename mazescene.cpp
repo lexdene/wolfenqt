@@ -31,7 +31,10 @@
 #include <QKeyEvent>
 #include <QTimer>
 #include <QVBoxLayout>
+#if 0
 #include <QWebView>
+#endif
+#include <QGraphicsWebView>
 
 #include <qmath.h>
 #include <qdebug.h>
@@ -282,13 +285,14 @@ void MazeScene::addWall(const QPointF &a, const QPointF &b, int type)
     }
 #endif
 
+#if 0
     QGraphicsProxyWidget *proxy = item->childItem();
     QWebView *view = proxy ? qobject_cast<QWebView *>(proxy->widget()) : 0;
     if (view) {
         connect(view, SIGNAL(loadFinished(bool)), this, SLOT(loadFinished()));
         proxy->setVisible(false);
     }
-
+#endif
     item->setVisible(false);
     addProjectedItem(item);
     m_walls << item;
@@ -544,9 +548,23 @@ WallItem::WallItem(MazeScene *scene, const QPointF &a, const QPointF &b, int typ
         m_scale = 0.5;
     } else if (type == 9) {
         if (a.x() > b.x()) {
+#if 0
             QWebView *view = new QWebView;
             view->setUrl(QUrl(QLatin1String("http://www.google.com")));
             childWidget = view;
+#endif
+            QGraphicsWebView *view = new QGraphicsWebView(this);
+            view->setCacheMode(QGraphicsItem::ItemCoordinateCache);
+            view->setResizesToContents(false);
+            view->setGeometry(QRectF(0, 0, 800, 600));
+            view->setUrl(QUrl(QLatin1String("http://www.google.com")));
+
+            QRectF rect = view->boundingRect();
+            QPointF center = rect.center();
+            qreal scale = qMin(m_scale / rect.width(), m_scale / rect.height());
+            view->translate(0, -0.05);
+            view->scale(scale, scale);
+            view->translate(-center.x(), -center.y());
         }
     } else if (type == 10) {
 #ifndef QT_NO_OPENGL
@@ -802,8 +820,8 @@ bool MazeScene::blocked(const QPointF &pos, Entity *me) const
 
     foreach (WallItem *item, m_walls) {
         if (item->type() == 6
-            || item->type() == -1 && m_doorAnimation->state() != QTimeLine::Running
-               && m_doorAnimation->direction() == QTimeLine::Backward)
+            || (item->type() == -1 && m_doorAnimation->state() != QTimeLine::Running
+               && m_doorAnimation->direction() == QTimeLine::Backward))
             continue;
 
         const QPointF a = item->a();
