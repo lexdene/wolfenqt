@@ -40,7 +40,7 @@ POSSIBILITY OF SUCH DAMAGE."
 #include <QVarLengthArray>
 
 #ifndef QT_NO_OPENGL
-#ifndef QT_OPENGL_ES_2
+#if !defined QT_OPENGL_ES_2 && !defined Q_WS_MAC
 #include <GL/glew.h>
 #endif
 #include <QtOpenGL>

@@ -40,7 +40,7 @@ POSSIBILITY OF SUCH DAMAGE."
 #include "mazescene.h"
 
 #ifndef QT_NO_OPENGL
-#ifndef QT_OPENGL_ES_2
+#if !defined QT_OPENGL_ES_2 && !defined Q_WS_MAC
 #include <GL/glew.h>
 #endif
 #include <QtOpenGL>
@@ -155,7 +155,7 @@ void ModelItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
     glClear(GL_DEPTH_BUFFER_BIT);
 
     if (!m_program) {
-#ifndef QT_OPENGL_ES_2
+#if !defined QT_OPENGL_ES_2 && !defined Q_WS_MAC
         glewInit();
 #endif
         m_program = new QGLShaderProgram;

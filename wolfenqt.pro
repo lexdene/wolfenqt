@@ -13,7 +13,7 @@ QT += webkit script
 
 contains(QT_CONFIG, opengl):{
 QT += opengl
-unix:!contains(QT_CONFIG, opengles2): LIBS += -lGLEW
+unix:!mac:!contains(QT_CONFIG, opengles2) LIBS += -lGLEW
 }
 
 contains(QT_CONFIG, phonon):{
