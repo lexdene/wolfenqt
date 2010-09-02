@@ -65,9 +65,7 @@ int main(int argc, char **argv)
     View view;
     view.resize(800, 600);
     view.setScene(scene);
-    view.show();
-
-    scene->toggleRenderer();
+    view.showFullScreen();
 
     return app.exec();
 }

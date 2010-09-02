@@ -59,9 +59,11 @@ public:
     View();
     void resizeEvent(QResizeEvent *event);
     void setScene(MazeScene *scene);
+    void paintEvent(QPaintEvent *event);
 
 private:
     MazeScene *m_scene;
+    bool m_firstPaint;
 };
 
 class Camera
@@ -195,6 +197,7 @@ public:
     Camera camera() const { return m_camera; }
 
     void viewResized(QGraphicsView *view);
+    void setAcceleratedViewport(bool accelerated);
 
 protected:
     void mouseMoveEvent(QGraphicsSceneMouseEvent *event);
@@ -244,6 +247,8 @@ private:
     int m_height;
     MediaPlayer *m_player;
     QPointF m_playerPos;
+
+    bool m_accelerated;
 
     WalkingItem *m_walkingItem;
 };

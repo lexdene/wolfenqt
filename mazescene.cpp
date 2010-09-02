@@ -68,6 +68,7 @@ POSSIBILITY OF SUCH DAMAGE."
 
 View::View()
     : m_scene(0)
+    , m_firstPaint(true)
 {
 }
 
@@ -87,6 +88,19 @@ void View::resizeEvent(QResizeEvent *)
 
     if (m_scene)
         m_scene->viewResized(this);
+}
+
+void View::paintEvent(QPaintEvent *event)
+{
+    if (m_firstPaint) {
+        QPainter p(viewport());
+	static_cast<MazeScene *>(scene())->setAcceleratedViewport(
+            p.paintEngine()->type() == QPaintEngine::OpenGL
+            || p.paintEngine()->type() == QPaintEngine::OpenGL2);
+        m_firstPaint = false;
+    }
+
+    QGraphicsView::paintEvent(event);
 }
 
 Light::Light(const QPointF &pos, qreal intensity)
@@ -208,6 +222,7 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
     , m_width(width)
     , m_height(height)
     , m_player(0)
+    , m_accelerated(false)
 {
     m_camera.setPos(QPointF(1.5, 1.5));
     m_camera.setYaw(0.1);
@@ -270,6 +285,14 @@ MazeScene::MazeScene(const QVector<Light> &lights, const char *map, int width, i
     m_walkingItem->setZValue(100000);
 
     addItem(m_walkingItem);
+}
+
+void MazeScene::setAcceleratedViewport(bool accelerated)
+{
+    m_accelerated = accelerated;
+
+    if (!accelerated)
+        QTimer::singleShot(0, this, SLOT(toggleRenderer()));
 }
 
 void MazeScene::viewResized(QGraphicsView *view)
@@ -1150,7 +1173,7 @@ void MazeScene::toggleRenderer()
 void MazeScene::updateRenderer()
 {
     QGraphicsView *view = views().isEmpty() ? 0 : views().at(0);
-    bool accelerated = view && view->viewport()->inherits("QGLWidget");
+    bool accelerated = m_accelerated || view && view->viewport()->inherits("QGLWidget");
     if (view) {
         if (accelerated)
             view->setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
