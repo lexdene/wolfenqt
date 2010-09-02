@@ -293,6 +293,8 @@ void MazeScene::setAcceleratedViewport(bool accelerated)
 
     if (!accelerated)
         QTimer::singleShot(0, this, SLOT(toggleRenderer()));
+
+    updateRenderer();
 }
 
 void MazeScene::viewResized(QGraphicsView *view)
