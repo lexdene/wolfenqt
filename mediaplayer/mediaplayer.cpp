@@ -94,7 +94,6 @@ protected:
             {
                 //we just update the state of the checkbox, in case it wasn't already
                 m_action.setChecked(windowState() & Qt::WindowFullScreen);
-                const Qt::WindowFlags flags = m_player->windowFlags();
                 if (windowState() & Qt::WindowFullScreen) {
                     m_timer.start(1000, this);
                 } else {
@@ -328,8 +327,6 @@ void MediaPlayer::stateChanged(Phonon::State newstate, Phonon::State oldstate)
     if (oldstate == Phonon::LoadingState) {
         m_videoWindow.setVisible(m_MediaObject.hasVideo());
         info->setVisible(!m_MediaObject.hasVideo());        
-        QRect videoHintRect = QRect(QPoint(0, 0), m_videoWindow.sizeHint());
-        QRect newVideoRect = QApplication::desktop()->screenGeometry().intersected(videoHintRect);
         if (m_MediaObject.hasVideo()){        
             // Flush event que so that sizeHint takes the
             // recently shown/hidden m_videoWindow into account:

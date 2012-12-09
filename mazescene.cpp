@@ -1175,7 +1175,7 @@ void MazeScene::toggleRenderer()
 void MazeScene::updateRenderer()
 {
     QGraphicsView *view = views().isEmpty() ? 0 : views().at(0);
-    bool accelerated = m_accelerated || view && view->viewport()->inherits("QGLWidget");
+    bool accelerated = m_accelerated || ( view && view->viewport()->inherits("QGLWidget") );
     if (view) {
         if (accelerated)
             view->setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
